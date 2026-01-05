@@ -4,3 +4,4 @@
 *.xcuserstate
 DerivedData/
 
+.DS_Store
