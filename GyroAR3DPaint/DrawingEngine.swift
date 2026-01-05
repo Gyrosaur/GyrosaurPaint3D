@@ -181,6 +181,14 @@ class DrawingEngine: ObservableObject {
     
     func addPoint(_ position: SIMD3<Float>) {
         guard isDrawing, tremoloActive else { return } // Tremolo can skip points
+        // Skip points that are too close to reduce CPU/GPU load when recording
+                if let last = currentStroke?.points.last {
+                    let minSpacing: Float = 0.002 // 2 mm
+                    if simd_distance(last.position, position) < minSpacing {
+                        return
+                    }
+                }
+                
         
         // Apply sparkle scatter if RT pressed
         var finalPos = position

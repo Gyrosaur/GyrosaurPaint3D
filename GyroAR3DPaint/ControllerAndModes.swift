@@ -432,7 +432,7 @@ class StraightLineState: ObservableObject {
         guard let start = startPoint, let end = endPoint else { return [] }
         
         let distance = simd_distance(start, end)
-        let pointCount = max(2, Int(distance / 0.005))
+        let pointCount = max(2, Int(distance / 0.015)) // fewer points = lighter rendering
         var points: [StrokePoint] = []
         
         for i in 0..<pointCount {

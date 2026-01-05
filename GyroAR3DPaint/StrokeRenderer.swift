@@ -66,6 +66,29 @@ class StrokeRenderer {
         return anchor
     }
     
+    // Downsample points to reduce per-stroke complexity when gradients/per-point colors are active
+        private func downsamplePoints(_ pts: [StrokePoint], maxCount: Int, minDistance: Float) -> [StrokePoint] {
+            guard pts.count > maxCount else { return pts }
+            var result: [StrokePoint] = []
+            var lastKept = pts.first!
+            result.append(lastKept)
+            
+            for p in pts.dropFirst() {
+                if simd_distance(p.position, lastKept.position) >= minDistance {
+                    result.append(p)
+                    lastKept = p
+                    if result.count >= maxCount { break }
+                }
+            }
+            
+            // Ensure the last point is present for continuity
+            if let last = pts.last, result.last?.position != last.position {
+                result.append(last)
+            }
+            
+            return result
+        }
+      
     private func buildEntity(for stroke: Stroke) -> ModelEntity {
         switch stroke.brushType {
         case .smooth, .tube: return makeTube(stroke, seg: 12)
@@ -160,10 +183,11 @@ class StrokeRenderer {
         let hasGradient = pts.contains { abs($0.gradientValue) > 0.05 }
         
         if hasPerPointColors || hasGradient {
+            let sampled = downsamplePoints(pts, maxCount: 400, minDistance: 0.0015)
             // Per-point rendering for color variation
-            for i in 0..<pts.count {
-                let p = pts[i]
-                let gradientPosition = pts.count > 1 ? Float(i) / Float(pts.count - 1) : 0.5
+            for i in 0..<sampled.count {
+                            let p = sampled[i]
+                            let gradientPosition = sampled.count > 1 ? Float(i) / Float(sampled.count - 1) : 0.5
                 let col = pointColor(p, stroke, gradientPosition: gradientPosition)
                 let material = SimpleMaterial(color: col, isMetallic: false)
                 
@@ -172,7 +196,7 @@ class StrokeRenderer {
                 parent.addChild(sphere)
                 
                 if i > 0 {
-                    let prev = pts[i - 1]
+                    let prev = sampled[i - 1]
                     let dist = simd_distance(prev.position, p.position)
                     if dist > 0.001 {
                         let cyl = ModelEntity(mesh: .generateCylinder(height: dist, radius: p.brushSize * 0.8), materials: [material])
@@ -207,12 +231,13 @@ class StrokeRenderer {
         let hasGradient = pts.contains { abs($0.gradientValue) > 0.05 }
         
         if hasGradient {
+            let sampled = downsamplePoints(pts, maxCount: 400, minDistance: 0.0015)
             // Per-segment rendering with gradient
-            for i in 1..<pts.count {
-                let p = pts[i], prev = pts[i-1]
-                let dir = direction(at: i, pts: pts)
+            for i in 1..<sampled.count {
+                            let p = sampled[i], prev = sampled[i-1]
+                            let dir = direction(at: i, pts: sampled)
                 let side = simd_normalize(simd_cross(dir, SIMD3<Float>(0, 1, 0)))
-                let gradientPosition = Float(i) / Float(pts.count - 1)
+                let gradientPosition = Float(i) / Float(sampled.count - 1)
                 let col = pointColor(p, stroke, gradientPosition: gradientPosition)
                 
                 let dist = simd_distance(prev.position, p.position)
