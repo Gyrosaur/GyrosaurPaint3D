@@ -62,7 +62,8 @@ struct ARViewContainer: UIViewRepresentable {
             arView.scene.addAnchor(linePreviewAnchor!)
             
             displayLink = CADisplayLink(target: self, selector: #selector(frameUpdate))
-            displayLink?.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
+            // Prefer a slightly lower ceiling to leave headroom for AR + recording
+            displayLink?.preferredFrameRateRange = CAFrameRateRange(minimum: 50, maximum: 90, preferred: 90)
             displayLink?.add(to: .main, forMode: .common)
             
             // Listen for selection
@@ -140,7 +141,7 @@ struct ARViewContainer: UIViewRepresentable {
                     // Arc preview - näytä kaari pisteinä
                     let arcHeight = distance * 0.3
                     let arcUp = SIMD3<Float>(0, 1, 0)
-                    let pointCount = max(10, Int(distance / 0.02))
+                    let pointCount = min(40, max(10, Int(distance / 0.05)))
                     
                     let parentEntity = ModelEntity()
                     
