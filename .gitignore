@@ -1,0 +1,6 @@
+# Xcode user files
+*.xcworkspace
+*.xcuserdata
+*.xcuserstate
+DerivedData/
+
