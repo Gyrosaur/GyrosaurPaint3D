@@ -1,0 +1,116 @@
+import SwiftUI
+
+enum AppMode: String, CaseIterable {
+    case realWorld = "Real World AR"
+    case virtualGallery = "White Room"
+    
+    var icon: String {
+        switch self {
+        case .realWorld: return "camera.fill"
+        case .virtualGallery: return "cube.fill"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .realWorld: return "Paint in your real environment"
+        case .virtualGallery: return "Paint in a virtual white space"
+        }
+    }
+}
+
+struct ModeSelectionView: View {
+    @Binding var selectedMode: AppMode?
+    
+    var body: some View {
+        ZStack {
+            // Background
+            LinearGradient(
+                colors: [Color(white: 0.1), Color(white: 0.05)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            
+            VStack(spacing: 40) {
+                // Title
+                VStack(spacing: 8) {
+                    Text("GyroAR3DPaint")
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                    
+                    Text("Choose your canvas")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.gray)
+                }
+                .padding(.top, 60)
+                
+                Spacer()
+                
+                // Mode buttons
+                VStack(spacing: 20) {
+                    ForEach(AppMode.allCases, id: \.self) { mode in
+                        ModeButton(mode: mode) {
+                            withAnimation(.spring(response: 0.3)) {
+                                selectedMode = mode
+                            }
+                        }
+                    }
+                }
+                
+                Spacer()
+                
+                // Footer
+                Text("Move your phone to paint in 3D space")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .padding(.bottom, 40)
+            }
+        }
+    }
+}
+
+struct ModeButton: View {
+    let mode: AppMode
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 16) {
+                Image(systemName: mode.icon)
+                    .font(.system(size: 28))
+                    .frame(width: 50)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(mode.rawValue)
+                        .font(.system(size: 18, weight: .semibold))
+                    
+                    Text(mode.description)
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray)
+                }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.gray)
+            }
+            .padding(20)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.white.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    )
+            )
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 24)
+    }
+}
+
+#Preview {
+    ModeSelectionView(selectedMode: .constant(nil))
+}
