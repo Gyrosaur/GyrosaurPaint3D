@@ -62,8 +62,10 @@ struct ARViewContainer: UIViewRepresentable {
             arView.scene.addAnchor(linePreviewAnchor!)
             
             displayLink = CADisplayLink(target: self, selector: #selector(frameUpdate))
-            // Prefer a slightly lower ceiling to leave headroom for AR + recording
-            displayLink?.preferredFrameRateRange = CAFrameRateRange(minimum: 50, maximum: 90, preferred: 90)
+            // Use performance level for frame rate
+            let level = PerformanceManager.shared.currentLevel
+            let targetFPS = Float(level.targetFrameRate)
+            displayLink?.preferredFrameRateRange = CAFrameRateRange(minimum: targetFPS * 0.5, maximum: targetFPS, preferred: targetFPS)
             displayLink?.add(to: .main, forMode: .common)
             
             // Listen for selection

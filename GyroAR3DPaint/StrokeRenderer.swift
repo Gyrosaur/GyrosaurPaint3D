@@ -8,10 +8,26 @@ class StrokeRenderer {
     private var strokeAnchors: [UUID: AnchorEntity] = [:]
     private var selectedHighlight: AnchorEntity?
     
+    // Cache performance level to avoid main actor issues
+    private var cachedPerformanceLevel: PerformanceLevel = .medium
+    
+    func updatePerformanceLevel() {
+        Task { @MainActor in
+            self.cachedPerformanceLevel = PerformanceManager.shared.currentLevel
+        }
+    }
+    
+    private var performanceLevel: PerformanceLevel {
+        return cachedPerformanceLevel
+    }
+    
     init(arView: ARView) {
         self.arView = arView
         NotificationCenter.default.addObserver(self, selector: #selector(handleClear), name: .strokesCleared, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(handleUndo(_:)), name: .strokeUndone, object: nil)
+        
+        // Initial performance level sync
+        updatePerformanceLevel()
     }
     
     @objc private func handleClear() {
@@ -45,7 +61,8 @@ class StrokeRenderer {
         guard let arView = arView else { return }
         selectedHighlight?.removeFromParent()
         let anchor = AnchorEntity(world: .zero)
-        for point in stroke.points {
+        let skip = performanceLevel.pointSkip
+        for (i, point) in stroke.points.enumerated() where i % skip == 0 {
             let sphere = ModelEntity(mesh: .generateSphere(radius: point.brushSize * 1.5), materials: [SimpleMaterial(color: .green.withAlphaComponent(0.3), isMetallic: false)])
             sphere.position = point.position
             anchor.addChild(sphere)
@@ -177,17 +194,28 @@ class StrokeRenderer {
     private func makeTube(_ stroke: Stroke, seg: Int) -> ModelEntity {
         let parent = ModelEntity()
         let pts = stroke.points
+        let level = performanceLevel
+        let actualSeg = min(seg, level.tubeSegments)
         
         // Check if any point has its own color set or gradient
         let hasPerPointColors = pts.contains { $0.color != nil }
         let hasGradient = pts.contains { abs($0.gradientValue) > 0.05 }
         
+        // Adjust max points based on performance level
+        let maxPoints: Int
+        let minDist: Float
+        switch level {
+        case .low: maxPoints = 150; minDist = 0.004
+        case .medium: maxPoints = 300; minDist = 0.002
+        case .high: maxPoints = 500; minDist = 0.001
+        }
+        
         if hasPerPointColors || hasGradient {
-            let sampled = downsamplePoints(pts, maxCount: 400, minDistance: 0.0015)
+            let sampled = downsamplePoints(pts, maxCount: maxPoints, minDistance: minDist)
             // Per-point rendering for color variation
             for i in 0..<sampled.count {
-                            let p = sampled[i]
-                            let gradientPosition = sampled.count > 1 ? Float(i) / Float(sampled.count - 1) : 0.5
+                let p = sampled[i]
+                let gradientPosition = sampled.count > 1 ? Float(i) / Float(sampled.count - 1) : 0.5
                 let col = pointColor(p, stroke, gradientPosition: gradientPosition)
                 let material = SimpleMaterial(color: col, isMetallic: false)
                 
@@ -209,19 +237,21 @@ class StrokeRenderer {
             }
             return parent
         } else {
+            // Downsample for single color too
+            let sampled = downsamplePoints(pts, maxCount: maxPoints, minDistance: minDist)
             // Original optimized mesh for single color
             var verts: [SIMD3<Float>] = [], inds: [UInt32] = []
-            for i in 0..<pts.count {
-                let p = pts[i], dir = direction(at: i, pts: pts), basis = makeBasis(dir)
-                for j in 0..<seg {
-                    let angle = Float(j) / Float(seg) * .pi * 2
+            for i in 0..<sampled.count {
+                let p = sampled[i], dir = direction(at: i, pts: sampled), basis = makeBasis(dir)
+                for j in 0..<actualSeg {
+                    let angle = Float(j) / Float(actualSeg) * .pi * 2
                     let norm = basis.0 * cos(angle) + basis.1 * sin(angle)
                     verts.append(p.position + norm * p.brushSize)
                 }
-                if i > 0 { for j in 0..<seg { let n = (j + 1) % seg; let b = UInt32((i - 1) * seg); let t = UInt32(i * seg)
+                if i > 0 { for j in 0..<actualSeg { let n = (j + 1) % actualSeg; let b = UInt32((i - 1) * actualSeg); let t = UInt32(i * actualSeg)
                     inds += [b + UInt32(j), t + UInt32(j), b + UInt32(n), b + UInt32(n), t + UInt32(j), t + UInt32(n)] } }
             }
-            return buildMesh(verts, inds, pointColor(pts[0], stroke))
+            return buildMesh(verts, inds, pointColor(sampled.first ?? pts[0], stroke))
         }
     }
     

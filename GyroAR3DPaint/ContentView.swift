@@ -7,6 +7,7 @@ import AVFoundation
 import Combine
 
 struct ContentView: View {
+    @EnvironmentObject var performanceManager: PerformanceManager
     @StateObject var drawingEngine = DrawingEngine()
     @StateObject var brushRatingManager = BrushRatingManager()
     @StateObject var controllerManager = GameControllerManager()
@@ -29,6 +30,7 @@ struct ContentView: View {
     @State private var showGallery = false
     @State private var showImageCrop = false
     @State private var showPaintImagePicker = false
+    @State private var showPerformanceSettings = false
     @State private var paintPhotoItem: PhotosPickerItem?
     @State private var tempPaintImage: UIImage?
     @State private var selectedPhotoItem: PhotosPickerItem?
@@ -73,6 +75,8 @@ struct ContentView: View {
         controllerManager.$buttonB.sink { [self] p in if p { drawingEngine.clearAllStrokes() } }.store(in: &controllerCancellables)
         controllerManager.$buttonX.sink { [self] p in if p { drawingEngine.undoLastStroke() } }.store(in: &controllerCancellables)
         controllerManager.$buttonA.sink { [self] p in if p { resetColorAndOpacity() } }.store(in: &controllerCancellables)
+        controllerManager.$buttonY.sink { [self] p in if p { cycleDrawingMode() } }.store(in: &controllerCancellables)
+        
     }
     
     func handleDpadUp() {
@@ -107,6 +111,13 @@ struct ContentView: View {
         }
     }
     
+    func cycleDrawingMode(forward: Bool = true) {
+            let modes = DrawingMode.allCases
+            guard let idx = modes.firstIndex(of: drawingMode) else { return }
+            let nextIndex = forward ? (idx + 1) % modes.count : (idx - 1 + modes.count) % modes.count
+            drawingMode = modes[nextIndex]
+        }
+        
     func handleLeftStick() {
         if selectionManager.isSelectionMode {
             moveSelectedStrokes()
@@ -427,6 +438,17 @@ struct ContentView: View {
             if showExport { exportModal }
             if showDrawingModes { drawingModesModal }
             if showImageSelector { imageSelectorModal }
+            if showPerformanceSettings { performanceSettingsModal }
+        }
+    }
+    
+    var performanceSettingsModal: some View {
+        ZStack {
+            Color.black.opacity(0.5).ignoresSafeArea()
+                .onTapGesture { showPerformanceSettings = false }
+            PerformanceSettingsPanel(performanceManager: performanceManager) {
+                showPerformanceSettings = false
+            }
         }
     }
     
@@ -459,6 +481,16 @@ extension ContentView {
                     Image(systemName: "gamecontroller.fill")
                         .font(.system(size: 12))
                         .foregroundColor(.green)
+                        .padding(4)
+                        .background(Color.black.opacity(0.5))
+                        .cornerRadius(4)
+                }
+                
+                // Performance indicator
+                Button(action: { showPerformanceSettings = true }) {
+                    Image(systemName: performanceManager.currentLevel.icon)
+                        .font(.system(size: 12))
+                        .foregroundColor(performanceManager.currentLevel.color)
                         .padding(4)
                         .background(Color.black.opacity(0.5))
                         .cornerRadius(4)

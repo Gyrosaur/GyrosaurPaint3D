@@ -18,6 +18,7 @@
 		AAA00009 /* VirtualGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA0001A /* VirtualGalleryView.swift */; };
 		AAA0000B /* BrushRatingAndExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA0001B /* BrushRatingAndExport.swift */; };
 		AAA0000C /* ControllerAndModes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA0001C /* ControllerAndModes.swift */; };
+		AAA0000D /* PerformanceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA0001D /* PerformanceSettings.swift */; };
 		CE226C272F0C48EE00DFF2BF /* AirPodsMotionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE226C262F0C48EE00DFF2BF /* AirPodsMotionManager.swift */; };
 		CE944E512F087B0400FB5510 /* AspectRatioAndGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE944E502F087B0400FB5510 /* AspectRatioAndGallery.swift */; };
 /* End PBXBuildFile section */
@@ -36,6 +37,7 @@
 		AAA0001A /* VirtualGalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualGalleryView.swift; sourceTree = "<group>"; };
 		AAA0001B /* BrushRatingAndExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushRatingAndExport.swift; sourceTree = "<group>"; };
 		AAA0001C /* ControllerAndModes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControllerAndModes.swift; sourceTree = "<group>"; };
+		AAA0001D /* PerformanceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceSettings.swift; sourceTree = "<group>"; };
 		CE226C262F0C48EE00DFF2BF /* AirPodsMotionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirPodsMotionManager.swift; sourceTree = "<group>"; };
 		CE944E502F087B0400FB5510 /* AspectRatioAndGallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AspectRatioAndGallery.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -73,6 +75,7 @@
 				AAA0001A /* VirtualGalleryView.swift */,
 				AAA0001B /* BrushRatingAndExport.swift */,
 				AAA0001C /* ControllerAndModes.swift */,
+				AAA0001D /* PerformanceSettings.swift */,
 				AAA00016 /* Assets.xcassets */,
 				AAA00017 /* Info.plist */,
 				CE944E502F087B0400FB5510 /* AspectRatioAndGallery.swift */,
@@ -169,6 +172,7 @@
 				AAA00009 /* VirtualGalleryView.swift in Sources */,
 				AAA0000B /* BrushRatingAndExport.swift in Sources */,
 				AAA0000C /* ControllerAndModes.swift in Sources */,
+				AAA0000D /* PerformanceSettings.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
