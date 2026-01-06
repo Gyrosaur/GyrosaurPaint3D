@@ -33,6 +33,7 @@ class GameControllerManager: ObservableObject {
     @Published var buttonY = false
     @Published var leftBumper = false
     @Published var rightBumper = false
+    @Published var menuButton = false  // Xbox menu button
     
     // Computed values for drawing
     var hueShift: Float {
@@ -185,6 +186,13 @@ class GameControllerManager: ObservableObject {
         gamepad.rightShoulder.valueChangedHandler = { [weak self] _, _, pressed in
             Task { @MainActor in
                 self?.rightBumper = pressed
+            }
+        }
+        
+        // Menu button (Xbox button with three lines)
+        gamepad.buttonMenu.valueChangedHandler = { [weak self] _, _, pressed in
+            Task { @MainActor in
+                self?.menuButton = pressed
             }
         }
     }
@@ -505,8 +513,9 @@ class StraightLineState: ObservableObject {
         let pointCount = max(2, Int(distance / 0.005))
         var points: [StrokePoint] = []
         
-        let minSize = brushSize * 0.1
-        let maxSize = brushSize
+        // Pienempi aloituskoko, loppu on brushSize
+        let minSize = brushSize * 0.05
+        let maxSize = brushSize * 0.5
         
         for i in 0..<pointCount {
             let t = Float(i) / Float(pointCount - 1)
@@ -536,8 +545,9 @@ class StraightLineState: ObservableObject {
         let pointCount = max(2, Int(distance / 0.005))
         var points: [StrokePoint] = []
         
-        let maxSize = brushSize
-        let minSize = brushSize * 0.1
+        // Isompi aloituskoko, loppu on pieni
+        let maxSize = brushSize * 0.5
+        let minSize = brushSize * 0.05
         
         for i in 0..<pointCount {
             let t = Float(i) / Float(pointCount - 1)

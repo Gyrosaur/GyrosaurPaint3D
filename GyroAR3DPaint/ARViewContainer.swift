@@ -72,8 +72,14 @@ struct ARViewContainer: UIViewRepresentable {
             NotificationCenter.default.addObserver(self, selector: #selector(handleStrokeSelected(_:)), name: .strokeSelected, object: nil)
             NotificationCenter.default.addObserver(self, selector: #selector(handleSelectionCleared), name: .selectionCleared, object: nil)
             NotificationCenter.default.addObserver(self, selector: #selector(handleStrokesNeedUpdate(_:)), name: .strokesNeedUpdate, object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(handleDrawingLockReleased), name: .drawingLockReleased, object: nil)
             
             setupTouchHandling()
+        }
+        
+        @objc func handleDrawingLockReleased() {
+            // Complete the locked drawing
+            handleTouchEnded()
         }
         
         @objc func handleStrokeSelected(_ notification: Notification) {
@@ -106,7 +112,7 @@ struct ARViewContainer: UIViewRepresentable {
             
             // Handle different drawing modes
             switch drawingMode {
-            case .freehand, .crescendo, .diminuendo:
+            case .freehand:
                 if drawingEngine.isDrawing {
                     drawingEngine.addPoint(brushPosition)
                     
@@ -115,7 +121,7 @@ struct ARViewContainer: UIViewRepresentable {
                     }
                 }
                 
-            case .straightLine, .arc:
+            case .straightLine, .arc, .crescendo, .diminuendo:
                 if let lineState = straightLineState, lineState.isDrawing {
                     lineState.endPoint = brushPosition
                     updateLinePreview()
@@ -208,10 +214,10 @@ struct ARViewContainer: UIViewRepresentable {
             let brushPosition = getBrushPosition(from: frame)
             
             switch drawingMode {
-            case .freehand, .crescendo, .diminuendo:
+            case .freehand:
                 drawingEngine.startDrawing()
                 
-            case .straightLine, .arc:
+            case .straightLine, .arc, .crescendo, .diminuendo:
                 straightLineState?.startPoint = brushPosition
                 straightLineState?.endPoint = brushPosition
                 straightLineState?.isDrawing = true
@@ -249,42 +255,57 @@ struct ARViewContainer: UIViewRepresentable {
                 }
                 
             case .crescendo:
-                if let completedStroke = drawingEngine.stopDrawing() {
-                    // Convert to crescendo (pieni -> iso)
-                    var crescendoStroke = completedStroke
-                    let count = crescendoStroke.points.count
-                    if count > 1 {
-                        let minSize = crescendoStroke.points.first?.brushSize ?? 0.01
-                        let maxSize = minSize * 10
-                        for i in 0..<count {
-                            let t = Float(i) / Float(count - 1)
-                            crescendoStroke.points[i].brushSize = minSize + (maxSize - minSize) * t
-                        }
+                // Line-based crescendo
+                if let lineState = straightLineState,
+                   lineState.startPoint != nil,
+                   lineState.endPoint != nil {
+                    
+                    let points = lineState.generateCrescendoPoints(
+                        brushSize: drawingEngine.brushSize,
+                        color: drawingEngine.currentColor,
+                        brushType: drawingEngine.selectedBrushType,
+                        opacity: drawingEngine.opacity,
+                        gradientValue: drawingEngine.airPodsGradientValue
+                    )
+                    
+                    if !points.isEmpty {
+                        var stroke = Stroke(color: drawingEngine.currentColor, brushType: drawingEngine.selectedBrushType)
+                        for point in points { stroke.addPoint(point) }
+                        drawingEngine.strokes.append(stroke)
+                        strokeRenderer?.finalizeStroke(stroke)
                     }
-                    // Replace last stroke with modified version
-                    if let lastIndex = drawingEngine.strokes.indices.last {
-                        drawingEngine.strokes[lastIndex] = crescendoStroke
-                    }
-                    strokeRenderer?.finalizeStroke(crescendoStroke)
+                    
+                    linePreviewAnchor?.children.removeAll()
+                    linePreviewEntity?.removeFromParent()
+                    linePreviewEntity = nil
+                    lineState.reset()
                 }
                 
             case .diminuendo:
-                if let completedStroke = drawingEngine.stopDrawing() {
-                    // Convert to diminuendo (iso -> pieni)
-                    var dimStroke = completedStroke
-                    let count = dimStroke.points.count
-                    if count > 1 {
-                        let maxSize = dimStroke.points.first?.brushSize ?? 0.01
-                        let minSize = maxSize * 0.1
-                        for i in 0..<count {
-                            let t = Float(i) / Float(count - 1)
-                            dimStroke.points[i].brushSize = maxSize - (maxSize - minSize) * t
-                        }
+                // Line-based diminuendo
+                if let lineState = straightLineState,
+                   lineState.startPoint != nil,
+                   lineState.endPoint != nil {
+                    
+                    let points = lineState.generateDiminuendoPoints(
+                        brushSize: drawingEngine.brushSize,
+                        color: drawingEngine.currentColor,
+                        brushType: drawingEngine.selectedBrushType,
+                        opacity: drawingEngine.opacity,
+                        gradientValue: drawingEngine.airPodsGradientValue
+                    )
+                    
+                    if !points.isEmpty {
+                        var stroke = Stroke(color: drawingEngine.currentColor, brushType: drawingEngine.selectedBrushType)
+                        for point in points { stroke.addPoint(point) }
+                        drawingEngine.strokes.append(stroke)
+                        strokeRenderer?.finalizeStroke(stroke)
                     }
-                    if let lastIndex = drawingEngine.strokes.indices.last {
-                        drawingEngine.strokes[lastIndex] = dimStroke
-                    }
-                    strokeRenderer?.finalizeStroke(dimStroke)
+                    
+                    linePreviewAnchor?.children.removeAll()
+                    linePreviewEntity?.removeFromParent()
+                    linePreviewEntity = nil
+                    lineState.reset()
                 }
                 
             case .straightLine:

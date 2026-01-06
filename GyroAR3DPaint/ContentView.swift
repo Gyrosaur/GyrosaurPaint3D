@@ -38,6 +38,12 @@ struct ContentView: View {
     @State private var effectMode: EffectMode = .none
     @State private var showControllerIcon = false
     @State private var showCrosshair = true  // Tähtäin on/off
+    @State private var hideUI = false  // Piilota kaikki UI paitsi silmä-ikoni
+    @State private var drawingLockActive = false  // Piirrinlukko
+    @State private var drawingLockDragOffset: CGFloat = 0
+    @State private var uiEditMode = false  // UI järjestely tila
+    @State private var toolRowAtBottom = false  // Tool row sijainti
+    @State private var colorRowAtBottom = false  // Color row sijainti
     @State private var arViewRef: ARView?
     
     @Binding var shouldExit: Bool
@@ -76,7 +82,7 @@ struct ContentView: View {
         controllerManager.$buttonX.sink { [self] p in if p { drawingEngine.undoLastStroke() } }.store(in: &controllerCancellables)
         controllerManager.$buttonA.sink { [self] p in if p { resetColorAndOpacity() } }.store(in: &controllerCancellables)
         controllerManager.$buttonY.sink { [self] p in if p { cycleDrawingMode() } }.store(in: &controllerCancellables)
-        
+        controllerManager.$menuButton.sink { [self] p in if p { hideUI.toggle() } }.store(in: &controllerCancellables)
     }
     
     func handleDpadUp() {
@@ -224,27 +230,41 @@ struct ContentView: View {
             arLayer
             
             // Crosshair (tähtäin)
-            if showCrosshair && !selectionManager.isSelectionMode {
+            if showCrosshair && !selectionManager.isSelectionMode && !hideUI {
                 CrosshairView(color: drawingEngine.currentColor)
             }
             
             // Selection mode indicator
-            if selectionManager.isSelectionMode {
+            if selectionManager.isSelectionMode && !hideUI {
                 SelectionModeOverlay(selectionManager: selectionManager, drawingEngine: drawingEngine)
             }
             
-            // Hide UI when recording
-            if !recordingManager.isRecording {
+            // Hide UI when recording or hideUI is true
+            if !recordingManager.isRecording && !hideUI {
                 topBarLayer
+                bottomToolsLayer
                 indicatorsOverlay
                 drawingInfoLayer
                 effectLayer
             }
-            recordingLayer
-            if !recordingManager.isRecording {
+            
+            // Recording layer - hidden when hideUI
+            if !hideUI {
+                recordingLayer
+            }
+            
+            if !recordingManager.isRecording && !hideUI {
                 modalsLayer
             }
             toastLayer
+            
+            // Drawing lock handle (left edge)
+            if !hideUI && (drawingMode == .straightLine || drawingMode == .arc || drawingMode == .crescendo || drawingMode == .diminuendo) {
+                drawingLockHandle
+            }
+            
+            // Eye icon to show/hide UI - always visible
+            eyeToggleButton
             
             // Image crop overlay
             if showImageCrop, let img = tempPaintImage {
@@ -274,7 +294,79 @@ struct ContentView: View {
                 )
             }
         }
-        .statusBarHidden(recordingManager.isRecording)
+        .statusBarHidden(recordingManager.isRecording || hideUI)
+    }
+    
+    var eyeToggleButton: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                Button(action: { hideUI.toggle() }) {
+                    Image(systemName: hideUI ? "eye.slash.fill" : "eye.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(.white.opacity(0.7))
+                        .padding(10)
+                        .background(Color.black.opacity(hideUI ? 0.3 : 0.5))
+                        .clipShape(Circle())
+                }
+                .padding(.trailing, 16)
+                .padding(.bottom, hideUI ? 30 : 100)
+            }
+        }
+    }
+    
+    var drawingLockHandle: some View {
+        HStack {
+            // Lock handle on left edge - swipe right to toggle
+            ZStack {
+                // Background track
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.black.opacity(0.3))
+                    .frame(width: 50, height: 120)
+                
+                // Lock indicator
+                VStack(spacing: 4) {
+                    Image(systemName: drawingLockActive ? "lock.fill" : "lock.open")
+                        .font(.system(size: 20))
+                        .foregroundColor(drawingLockActive ? .yellow : .white.opacity(0.6))
+                    
+                    Text(drawingLockActive ? "LOCKED" : "LOCK")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(drawingLockActive ? .yellow : .white.opacity(0.6))
+                    
+                    // Drag indicator
+                    Image(systemName: "chevron.right.2")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.4))
+                }
+                .offset(x: drawingLockDragOffset)
+            }
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        // Always drag right to toggle
+                        drawingLockDragOffset = max(0, min(60, value.translation.width))
+                    }
+                    .onEnded { value in
+                        // Toggle lock if dragged far enough right
+                        if value.translation.width > 40 {
+                            drawingLockActive.toggle()
+                            if !drawingLockActive {
+                                // Unlock - complete drawing
+                                straightLineState.isDrawing = false
+                                NotificationCenter.default.post(name: .drawingLockReleased, object: nil)
+                            }
+                        }
+                        withAnimation(.spring(response: 0.3)) {
+                            drawingLockDragOffset = 0
+                        }
+                    }
+            )
+            .offset(x: -10)
+            
+            Spacer()
+        }
     }
     
     var arLayer: some View {
@@ -410,7 +502,49 @@ struct ContentView: View {
     }
     
     var topBarLayer: some View {
-        VStack(spacing: 0) { compactTopBar; Spacer() }
+        VStack(spacing: 0) {
+            VStack(spacing: 6) {
+                if !toolRowAtBottom {
+                    DraggableToolRow(
+                        content: AnyView(toolRow),
+                        isEditMode: uiEditMode,
+                        isAtBottom: $toolRowAtBottom
+                    )
+                }
+                if !colorRowAtBottom {
+                    DraggableToolRow(
+                        content: AnyView(colorRow),
+                        isEditMode: uiEditMode,
+                        isAtBottom: $colorRowAtBottom
+                    )
+                }
+            }
+            .padding(.top, 50)
+            Spacer()
+        }
+    }
+    
+    var bottomToolsLayer: some View {
+        VStack {
+            Spacer()
+            VStack(spacing: 6) {
+                if toolRowAtBottom {
+                    DraggableToolRow(
+                        content: AnyView(toolRow),
+                        isEditMode: uiEditMode,
+                        isAtBottom: $toolRowAtBottom
+                    )
+                }
+                if colorRowAtBottom {
+                    DraggableToolRow(
+                        content: AnyView(colorRow),
+                        isEditMode: uiEditMode,
+                        isAtBottom: $colorRowAtBottom
+                    )
+                }
+            }
+            .padding(.bottom, 130) // Above recording controls
+        }
     }
     
     var drawingInfoLayer: some View {
@@ -512,6 +646,11 @@ extension ContentView {
             SmallToolBtn(icon: "square.and.arrow.up", size: 30) { showExport = true }
             SmallToolBtn(icon: "arrow.uturn.backward", size: 30) { drawingEngine.undoLastStroke() }
             SmallToolBtn(icon: "trash", size: 30) { drawingEngine.clearAllStrokes() }
+            
+            // UI Edit mode toggle
+            SmallToolBtn(icon: "slider.horizontal.3", size: 30, hl: uiEditMode) { 
+                withAnimation(.spring(response: 0.3)) { uiEditMode.toggle() }
+            }
         }
         .padding(.horizontal, 12)
     }
@@ -687,6 +826,57 @@ extension ContentView {
             Circle().fill(drawingEngine.currentColor).frame(width: 14, height: 14)
                 .overlay(Circle().stroke(Color.white, lineWidth: 1))
         }
+    }
+}
+
+// MARK: - Draggable Tool Row
+struct DraggableToolRow: View {
+    let content: AnyView
+    let isEditMode: Bool
+    @Binding var isAtBottom: Bool
+    
+    @State private var dragOffset: CGFloat = 0
+    @State private var isDragging = false
+    
+    var body: some View {
+        content
+            .opacity(isEditMode ? 0.7 : 1.0)
+            .overlay(
+                Group {
+                    if isEditMode {
+                        // Edit mode overlay
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.cyan.opacity(0.5), style: StrokeStyle(lineWidth: 2, dash: [5, 5]))
+                            .padding(.horizontal, 8)
+                    }
+                }
+            )
+            .offset(y: dragOffset)
+            .scaleEffect(isEditMode ? (isDragging ? 1.05 : 1.0) : 1.0)
+            .animation(.spring(response: 0.3), value: isDragging)
+            .rotationEffect(isEditMode && !isDragging ? .degrees(Double.random(in: -0.5...0.5)) : .zero)
+            .animation(isEditMode ? .easeInOut(duration: 2).repeatForever(autoreverses: true) : .default, value: isEditMode)
+            .gesture(
+                isEditMode ?
+                DragGesture()
+                    .onChanged { value in
+                        isDragging = true
+                        dragOffset = value.translation.height
+                    }
+                    .onEnded { value in
+                        isDragging = false
+                        // If dragged more than 100 points, toggle position
+                        if abs(value.translation.height) > 100 {
+                            withAnimation(.spring(response: 0.4)) {
+                                isAtBottom.toggle()
+                            }
+                        }
+                        withAnimation(.spring(response: 0.3)) {
+                            dragOffset = 0
+                        }
+                    }
+                : nil
+            )
     }
 }
 
@@ -1178,23 +1368,47 @@ struct SaveSuccessToast: View {
 
 
 
-// MARK: - Crosshair View
+// MARK: - Crosshair View with Depth Indicator
 struct CrosshairView: View {
     let color: Color
+    let depthDistance: Float  // 0.3m default brush distance
+    
+    init(color: Color, depthDistance: Float = 0.3) {
+        self.color = color
+        self.depthDistance = depthDistance
+    }
     
     var body: some View {
         let darkColor = darken(color)
         
         ZStack {
-            // Ulompi ympyrä
-            Circle()
-                .stroke(darkColor.opacity(0.6), lineWidth: 1)
-                .frame(width: 20, height: 20)
-            
-            // Sisempi piste
-            Circle()
-                .fill(darkColor.opacity(0.8))
-                .frame(width: 4, height: 4)
+            // Depth indicator - katkoviiva ylöspäin (näyttää syvyyden)
+            VStack(spacing: 0) {
+                // Katkoviiva syvyyssuuntaan
+                DepthDashLine()
+                    .stroke(darkColor.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                    .frame(width: 1, height: 40)
+                
+                // Syvyysmerkki (pieni vaakaviiva)
+                Rectangle()
+                    .fill(darkColor.opacity(0.4))
+                    .frame(width: 12, height: 1)
+                
+                Spacer().frame(height: 8)
+                
+                // Pääristikko
+                ZStack {
+                    // Ulompi ympyrä
+                    Circle()
+                        .stroke(darkColor.opacity(0.6), lineWidth: 1)
+                        .frame(width: 20, height: 20)
+                    
+                    // Sisempi piste
+                    Circle()
+                        .fill(darkColor.opacity(0.8))
+                        .frame(width: 4, height: 4)
+                }
+            }
         }
     }
     
@@ -1202,6 +1416,15 @@ struct CrosshairView: View {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
         return Color(red: r * 0.4, green: g * 0.4, blue: b * 0.4)
+    }
+}
+
+struct DepthDashLine: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: 0))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.height))
+        return path
     }
 }
 
@@ -1256,4 +1479,5 @@ struct SelectionModeOverlay: View {
 // MARK: - Notification Names
 extension Notification.Name {
     static let strokesNeedUpdate = Notification.Name("strokesNeedUpdate")
+    static let drawingLockReleased = Notification.Name("drawingLockReleased")
 }

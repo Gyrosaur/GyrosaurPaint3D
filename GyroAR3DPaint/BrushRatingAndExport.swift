@@ -218,19 +218,73 @@ class ExportManager {
             let totalStrokes = strokes.count
             let skip = quality.pointSkip
             
+            // Material cache to avoid creating duplicates
+            var materialCache: [String: SCNMaterial] = [:]
+            
+            func getMaterial(for color: UIColor) -> SCNMaterial {
+                var r: CGFloat = 1, g: CGFloat = 1, b: CGFloat = 1, a: CGFloat = 1
+                color.getRed(&r, green: &g, blue: &b, alpha: &a)
+                let key = "\(Int(r*255))_\(Int(g*255))_\(Int(b*255))_\(Int(a*100))"
+                
+                if let cached = materialCache[key] {
+                    return cached
+                }
+                
+                let material = SCNMaterial()
+                material.diffuse.contents = color
+                material.lightingModel = .physicallyBased
+                material.metalness.contents = 0.1
+                material.roughness.contents = 0.6
+                // Lisää emission jotta värit näkyvät paremmin
+                material.emission.contents = color.withAlphaComponent(0.15)
+                materialCache[key] = material
+                return material
+            }
+            
             for (strokeIndex, stroke) in strokes.enumerated() {
                 guard stroke.points.count >= 2 else { continue }
                 
-                var r: CGFloat = 1, g: CGFloat = 1, b: CGFloat = 1, a: CGFloat = 1
-                UIColor(stroke.color).getRed(&r, green: &g, blue: &b, alpha: &a)
-                let material = SCNMaterial()
-                material.diffuse.contents = UIColor(red: r, green: g, blue: b, alpha: a)
-                
                 let strokeNode = SCNNode()
+                strokeNode.name = "stroke_\(stroke.brushType.rawValue)_\(strokeIndex)"
+                
+                // Stroke-level color (fallback)
+                let strokeColor = UIColor(stroke.color)
                 
                 for i in stride(from: 0, to: stroke.points.count, by: skip) {
                     let p = stroke.points[i]
+                    
+                    // Get point-specific color or use stroke color
+                    let pointColor: UIColor
+                    if let pc = p.color {
+                        pointColor = UIColor(pc).withAlphaComponent(CGFloat(p.opacity))
+                    } else {
+                        pointColor = strokeColor.withAlphaComponent(CGFloat(p.opacity))
+                    }
+                    
+                    // Apply gradient if present
+                    let finalColor: UIColor
+                    if abs(p.gradientValue) > 0.05 {
+                        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+                        pointColor.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+                        let gradientPosition = Float(i) / Float(max(1, stroke.points.count - 1))
+                        let intensity = abs(CGFloat(p.gradientValue))
+                        let brightnessRange: CGFloat = 0.5 * intensity
+                        var brightnessAdjust: CGFloat
+                        if p.gradientValue < 0 {
+                            brightnessAdjust = brightnessRange * (1 - CGFloat(gradientPosition) * 2)
+                        } else {
+                            brightnessAdjust = brightnessRange * (CGFloat(gradientPosition) * 2 - 1)
+                        }
+                        b = max(0.1, min(1.0, b + brightnessAdjust))
+                        finalColor = UIColor(hue: h, saturation: s, brightness: b, alpha: a)
+                    } else {
+                        finalColor = pointColor
+                    }
+                    
+                    let material = getMaterial(for: finalColor)
+                    
                     let sphere = SCNSphere(radius: CGFloat(p.brushSize))
+                    sphere.segmentCount = quality == .high ? 16 : (quality == .medium ? 12 : 8)
                     sphere.materials = [material]
                     let sphereNode = SCNNode(geometry: sphere)
                     sphereNode.position = SCNVector3(p.position.x, p.position.y, p.position.z)
@@ -242,6 +296,7 @@ class ExportManager {
                         let dist = simd_distance(prev.position, p.position)
                         if dist > 0.001 {
                             let cyl = SCNCylinder(radius: CGFloat(p.brushSize * 0.8), height: CGFloat(dist))
+                            cyl.radialSegmentCount = quality == .high ? 12 : (quality == .medium ? 8 : 6)
                             cyl.materials = [material]
                             let cylNode = SCNNode(geometry: cyl)
                             cylNode.position = SCNVector3(
@@ -262,6 +317,14 @@ class ExportManager {
                 let progress = Float(strokeIndex + 1) / Float(totalStrokes) * 0.8
                 await MainActor.run { onProgress(progress) }
             }
+            
+            // Add ambient light for better color visibility
+            let ambientLight = SCNNode()
+            ambientLight.light = SCNLight()
+            ambientLight.light?.type = .ambient
+            ambientLight.light?.intensity = 500
+            ambientLight.light?.color = UIColor.white
+            scene.rootNode.addChildNode(ambientLight)
             
             await MainActor.run { onProgress(0.9) }
             
