@@ -36,15 +36,15 @@ enum BrushType: String, CaseIterable {
     case pulse = "Pulse"
     case aurora = "Aurora"
     case prism = "Prism"
-    // Uudet geometriset
-    case crystal = "Crystal"      // Teräviä kristalleja
-    case lightning = "Lightning"  // Salama/sähköpurkaus
-    case shatter = "Shatter"      // Rikkoutuneet sirpaleet
-    case orbit = "Orbit"          // Kiertävät renkaat
-    case blade = "Blade"          // Teräviä teriä
-    case fractal = "Fractal"      // Fraktaalimainen
-    case mesh = "Mesh"            // Verkkorakenne
-    case spike = "Spike"          // Piikkejä
+    // Uudet epäsäännölliset muodot
+    case torus = "Torus"          // Rinkeli/donitsi-muoto
+    case morph = "Morph"          // Muuttuva monikulmio (3-8 kulmaa)
+    case blob = "Blob"            // Orgaaninen möykky (metaball)
+    case coil = "Coil"            // Kierteinen jousi
+    case membrane = "Membrane"    // Ohut kalvo/kupla
+    case lattice = "Lattice"      // 3D ristikkorakenne
+    case tendril = "Tendril"      // Haarautuva lonkero
+    case voxel = "Voxel"          // Pikselimäinen 3D-kuutio
     
     var icon: String {
         switch self {
@@ -67,15 +67,15 @@ enum BrushType: String, CaseIterable {
         case .pulse: return "waveform.path"
         case .aurora: return "rainbow"
         case .prism: return "triangle.fill"
-        // Uudet
-        case .crystal: return "cube.fill"
-        case .lightning: return "bolt.fill"
-        case .shatter: return "burst.fill"
-        case .orbit: return "circle.circle"
-        case .blade: return "scissors"
-        case .fractal: return "snowflake"
-        case .mesh: return "square.grid.3x3"
-        case .spike: return "star.leadinghalf.filled"
+        // Uudet epäsäännölliset
+        case .torus: return "circle.dashed"
+        case .morph: return "seal.fill"
+        case .blob: return "drop.fill"
+        case .coil: return "hurricane"
+        case .membrane: return "oval.fill"
+        case .lattice: return "cube.transparent"
+        case .tendril: return "arrow.triangle.branch"
+        case .voxel: return "square.3.layers.3d"
         }
     }
 }

@@ -4,6 +4,13 @@ import ARKit
 import Combine
 import AVFoundation
 
+private func makeARConfiguration(environmentTexturingEnabled: Bool) -> ARWorldTrackingConfiguration {
+    let config = ARWorldTrackingConfiguration()
+    config.planeDetection = []
+    config.environmentTexturing = environmentTexturingEnabled ? .automatic : .none
+    return config
+}
+
 struct ARViewContainer: UIViewRepresentable {
     @ObservedObject var drawingEngine: DrawingEngine
     @ObservedObject var controllerManager: GameControllerManager
@@ -13,11 +20,8 @@ struct ARViewContainer: UIViewRepresentable {
     
     func makeUIView(context: Context) -> ARView {
         let arView = ARView(frame: .zero)
-        
-        let config = ARWorldTrackingConfiguration()
-        config.planeDetection = []
-        config.environmentTexturing = .automatic
-        
+        let settings = PerformanceManager.shared.graphicsSettings
+        let config = makeARConfiguration(environmentTexturingEnabled: settings.environmentTexturingEnabled)
         arView.session.run(config)
         
         context.coordinator.arView = arView
@@ -26,12 +30,14 @@ struct ARViewContainer: UIViewRepresentable {
         context.coordinator.selectionManager = selectionManager
         context.coordinator.straightLineState = straightLineState
         context.coordinator.startFrameUpdates()
+        context.coordinator.applyGraphicsSettings(to: arView)
         
         return arView
     }
     
     func updateUIView(_ uiView: ARView, context: Context) {
         context.coordinator.drawingMode = drawingMode
+        context.coordinator.applyGraphicsSettings(to: uiView)
     }
     
     func makeCoordinator() -> Coordinator {
@@ -51,6 +57,7 @@ struct ARViewContainer: UIViewRepresentable {
         private var strokeRenderer: StrokeRenderer?
         private var linePreviewEntity: ModelEntity?
         private var linePreviewAnchor: AnchorEntity?
+        private var lastGraphicsSettings: PerformanceManager.GraphicsSettings?
         
         func startFrameUpdates() {
             guard let arView = arView else { return }
@@ -195,6 +202,26 @@ struct ARViewContainer: UIViewRepresentable {
             touchView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             touchView.coordinator = self
             arView.addSubview(touchView)
+        }
+
+        func applyGraphicsSettings(to arView: ARView) {
+            let settings = PerformanceManager.shared.graphicsSettings
+            var renderOptions: ARView.RenderOptions = []
+            if !settings.hdrEnabled {
+                renderOptions.insert(.disableHDR)
+            }
+            if !settings.cameraGrainEnabled {
+                renderOptions.insert(.disableCameraGrain)
+            }
+            if arView.renderOptions != renderOptions {
+                arView.renderOptions = renderOptions
+            }
+
+            if lastGraphicsSettings?.environmentTexturingEnabled != settings.environmentTexturingEnabled {
+                let config = makeARConfiguration(environmentTexturingEnabled: settings.environmentTexturingEnabled)
+                arView.session.run(config)
+            }
+            lastGraphicsSettings = settings
         }
         
         func handleTouchBegan(at location: CGPoint, in view: UIView) {
@@ -435,9 +462,8 @@ struct ARViewContainerWithRef: UIViewRepresentable {
     
     func makeUIView(context: Context) -> ARView {
         let arView = ARView(frame: .zero)
-        let config = ARWorldTrackingConfiguration()
-        config.planeDetection = []
-        config.environmentTexturing = .automatic
+        let settings = PerformanceManager.shared.graphicsSettings
+        let config = makeARConfiguration(environmentTexturingEnabled: settings.environmentTexturingEnabled)
         arView.session.run(config)
         
         context.coordinator.arView = arView
@@ -446,6 +472,7 @@ struct ARViewContainerWithRef: UIViewRepresentable {
         context.coordinator.selectionManager = selectionManager
         context.coordinator.straightLineState = straightLineState
         context.coordinator.startFrameUpdates()
+        context.coordinator.applyGraphicsSettings(to: arView)
         
         DispatchQueue.main.async { self.arViewRef = arView }
         return arView
@@ -453,6 +480,7 @@ struct ARViewContainerWithRef: UIViewRepresentable {
     
     func updateUIView(_ uiView: ARView, context: Context) {
         context.coordinator.drawingMode = drawingMode
+        context.coordinator.applyGraphicsSettings(to: uiView)
         
         // Background
         if let bgColor = cameraSettings.backgroundMode.color {

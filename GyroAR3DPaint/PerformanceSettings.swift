@@ -90,10 +90,34 @@ enum PerformanceLevel: String, CaseIterable {
 @MainActor
 class PerformanceManager: ObservableObject {
     static let shared = PerformanceManager()
+
+    struct GraphicsSettings: Equatable {
+        let environmentTexturingEnabled: Bool
+        let hdrEnabled: Bool
+        let cameraGrainEnabled: Bool
+    }
     
     @Published var currentLevel: PerformanceLevel {
         didSet {
             UserDefaults.standard.set(currentLevel.rawValue, forKey: "performanceLevel")
+        }
+    }
+
+    @Published var environmentTexturingEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(environmentTexturingEnabled, forKey: "environmentTexturingEnabled")
+        }
+    }
+
+    @Published var hdrEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(hdrEnabled, forKey: "hdrEnabled")
+        }
+    }
+
+    @Published var cameraGrainEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(cameraGrainEnabled, forKey: "cameraGrainEnabled")
         }
     }
     
@@ -108,17 +132,55 @@ class PerformanceManager: ObservableObject {
     init() {
         // Detect device capability first
         let detected = PerformanceManager.detectDeviceLevel()
-        self.autoDetectedLevel = detected
-        
-        // Load saved preference or use auto-detected
+        let resolvedLevel: PerformanceLevel
         if let saved = UserDefaults.standard.string(forKey: "performanceLevel"),
            let level = PerformanceLevel(rawValue: saved) {
-            self.currentLevel = level
+            resolvedLevel = level
         } else {
-            self.currentLevel = detected
+            resolvedLevel = detected
         }
-        
-        self.hasSelectedLevel = UserDefaults.standard.bool(forKey: "hasSelectedPerformanceLevel")
+
+        autoDetectedLevel = detected
+        currentLevel = resolvedLevel
+        hasSelectedLevel = UserDefaults.standard.bool(forKey: "hasSelectedPerformanceLevel")
+
+        let defaultGraphics = PerformanceManager.defaultGraphicsSettings(for: resolvedLevel)
+        if UserDefaults.standard.object(forKey: "environmentTexturingEnabled") != nil {
+            environmentTexturingEnabled = UserDefaults.standard.bool(forKey: "environmentTexturingEnabled")
+        } else {
+            environmentTexturingEnabled = defaultGraphics.environmentTexturingEnabled
+        }
+
+        if UserDefaults.standard.object(forKey: "hdrEnabled") != nil {
+            hdrEnabled = UserDefaults.standard.bool(forKey: "hdrEnabled")
+        } else {
+            hdrEnabled = defaultGraphics.hdrEnabled
+        }
+
+        if UserDefaults.standard.object(forKey: "cameraGrainEnabled") != nil {
+            cameraGrainEnabled = UserDefaults.standard.bool(forKey: "cameraGrainEnabled")
+        } else {
+            cameraGrainEnabled = defaultGraphics.cameraGrainEnabled
+        }
+    }
+
+    var graphicsSettings: GraphicsSettings {
+        GraphicsSettings(
+            environmentTexturingEnabled: environmentTexturingEnabled,
+            hdrEnabled: hdrEnabled,
+            cameraGrainEnabled: cameraGrainEnabled
+        )
+    }
+
+    static func defaultGraphicsSettings(for level: PerformanceLevel) -> GraphicsSettings {
+        switch level {
+        case .low:
+            return GraphicsSettings(environmentTexturingEnabled: false, hdrEnabled: false, cameraGrainEnabled: false)
+        case .medium:
+            return GraphicsSettings(environmentTexturingEnabled: true, hdrEnabled: true, cameraGrainEnabled: false)
+        case .high:
+            return GraphicsSettings(environmentTexturingEnabled: true, hdrEnabled: true, cameraGrainEnabled: true)
+        }
     }
     
     static func detectDeviceLevel() -> PerformanceLevel {
@@ -184,6 +246,10 @@ class PerformanceManager: ObservableObject {
     
     func resetToDefault() {
         currentLevel = autoDetectedLevel
+        let defaults = PerformanceManager.defaultGraphicsSettings(for: autoDetectedLevel)
+        environmentTexturingEnabled = defaults.environmentTexturingEnabled
+        hdrEnabled = defaults.hdrEnabled
+        cameraGrainEnabled = defaults.cameraGrainEnabled
     }
 }
 
@@ -411,6 +477,46 @@ struct PerformanceSettingsPanel: View {
                     }
                 }
             }
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Graphics Options")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+
+                Toggle(isOn: $performanceManager.environmentTexturingEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Environment Texturing")
+                            .foregroundColor(.white)
+                        Text("Disables real-world reflections to save GPU time.")
+                            .font(.system(size: 11))
+                            .foregroundColor(.gray)
+                    }
+                }
+                .toggleStyle(SwitchToggleStyle(tint: .cyan))
+
+                Toggle(isOn: $performanceManager.hdrEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("HDR Lighting")
+                            .foregroundColor(.white)
+                        Text("Lower lighting complexity for smoother rendering.")
+                            .font(.system(size: 11))
+                            .foregroundColor(.gray)
+                    }
+                }
+                .toggleStyle(SwitchToggleStyle(tint: .cyan))
+
+                Toggle(isOn: $performanceManager.cameraGrainEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Camera Grain")
+                            .foregroundColor(.white)
+                        Text("Turn off for a cleaner, lighter camera feed.")
+                            .font(.system(size: 11))
+                            .foregroundColor(.gray)
+                    }
+                }
+                .toggleStyle(SwitchToggleStyle(tint: .cyan))
+            }
+            .padding(.top, 6)
             
             // Reset button
             Button(action: {

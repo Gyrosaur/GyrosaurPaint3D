@@ -21,6 +21,7 @@
 		AAA0000D /* PerformanceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA0001D /* PerformanceSettings.swift */; };
 		AAA0000E /* VideoEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA0001E /* VideoEditorView.swift */; };
 		CE226C272F0C48EE00DFF2BF /* AirPodsMotionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE226C262F0C48EE00DFF2BF /* AirPodsMotionManager.swift */; };
+		CE732B9E2F1169AA006E08AA /* Gyro3DColorButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE732B9D2F1169AA006E08AA /* Gyro3DColorButton.swift */; };
 		CE944E512F087B0400FB5510 /* AspectRatioAndGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE944E502F087B0400FB5510 /* AspectRatioAndGallery.swift */; };
 /* End PBXBuildFile section */
 
@@ -41,6 +42,7 @@
 		AAA0001D /* PerformanceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceSettings.swift; sourceTree = "<group>"; };
 		AAA0001E /* VideoEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoEditorView.swift; sourceTree = "<group>"; };
 		CE226C262F0C48EE00DFF2BF /* AirPodsMotionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirPodsMotionManager.swift; sourceTree = "<group>"; };
+		CE732B9D2F1169AA006E08AA /* Gyro3DColorButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gyro3DColorButton.swift; sourceTree = "<group>"; };
 		CE944E502F087B0400FB5510 /* AspectRatioAndGallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AspectRatioAndGallery.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -70,6 +72,7 @@
 				AAA00018 /* ModeSelectionView.swift */,
 				AAA00012 /* ContentView.swift */,
 				AAA00013 /* ARViewContainer.swift */,
+				CE732B9D2F1169AA006E08AA /* Gyro3DColorButton.swift */,
 				AAA00014 /* DrawingEngine.swift */,
 				CE226C262F0C48EE00DFF2BF /* AirPodsMotionManager.swift */,
 				AAA00015 /* StrokeRenderer.swift */,
@@ -129,7 +132,7 @@
 					};
 				};
 			};
-			buildConfigurationList = AAA00060 /* Build configuration list for PBXProject "GyroAR3DPaint" */;
+			buildConfigurationList = AAA00060 /* Build configuration list for PBXProject "GyroAR3DPaint_cpu" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -163,6 +166,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CE732B9E2F1169AA006E08AA /* Gyro3DColorButton.swift in Sources */,
 				CE226C272F0C48EE00DFF2BF /* AirPodsMotionManager.swift in Sources */,
 				AAA00001 /* GyroAR3DPaintApp.swift in Sources */,
 				AAA00007 /* ModeSelectionView.swift in Sources */,
@@ -388,7 +392,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		AAA00060 /* Build configuration list for PBXProject "GyroAR3DPaint" */ = {
+		AAA00060 /* Build configuration list for PBXProject "GyroAR3DPaint_cpu" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				AAA00061 /* Debug */,
