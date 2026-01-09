@@ -243,7 +243,7 @@ enum DrawingMode: String, CaseIterable {
         switch self {
         case .freehand: return "scribble"
         case .straightLine: return "line.diagonal"
-        case .arc: return "arrow.up.right.and.arrow.down.left.circle"
+        case .arc: return "circle.bottomhalf.filled"
         case .crescendo: return "triangle.fill"
         case .diminuendo: return "triangle"
         }
@@ -513,9 +513,9 @@ class StraightLineState: ObservableObject {
         let pointCount = max(2, Int(distance / 0.005))
         var points: [StrokePoint] = []
         
-        // Pienempi aloituskoko, loppu on brushSize
-        let minSize = brushSize * 0.05
-        let maxSize = brushSize * 0.5
+        // Isompi max koko
+        let minSize = brushSize * 0.02
+        let maxSize = brushSize * 1.5
         
         for i in 0..<pointCount {
             let t = Float(i) / Float(pointCount - 1)
@@ -545,9 +545,9 @@ class StraightLineState: ObservableObject {
         let pointCount = max(2, Int(distance / 0.005))
         var points: [StrokePoint] = []
         
-        // Isompi aloituskoko, loppu on pieni
-        let maxSize = brushSize * 0.5
-        let minSize = brushSize * 0.05
+        // Isompi max koko
+        let maxSize = brushSize * 1.5
+        let minSize = brushSize * 0.02
         
         for i in 0..<pointCount {
             let t = Float(i) / Float(pointCount - 1)

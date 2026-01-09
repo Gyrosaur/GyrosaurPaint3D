@@ -108,34 +108,34 @@ class StrokeRenderer {
       
     private func buildEntity(for stroke: Stroke) -> ModelEntity {
         switch stroke.brushType {
-        case .smooth, .tube: return makeTube(stroke, seg: 12)
+        case .smooth: return makeTube(stroke, seg: 12)
         case .ribbon: return makeRibbon(stroke)
         case .vine: return makeVine(stroke)
-        case .coral: return makeCoral(stroke)
         case .tentacle: return makeTentacle(stroke)
-        case .root: return makeRoot(stroke)
-        case .branch: return makeBranch(stroke)
         case .helix: return makeHelix(stroke)
-        case .dna: return makeDNA(stroke)
         case .chain: return makeChain(stroke)
         case .zigzag: return makeZigzag(stroke)
         case .spiral: return makeSpiral(stroke)
-        case .splatter: return makeSplatter(stroke)
         case .confetti: return makeConfetti(stroke)
         case .sparkle: return makeSparkle(stroke)
         case .stardust: return makeStardust(stroke)
         case .bubbles: return makeBubbles(stroke)
         case .fireflies: return makeFireflies(stroke)
-        case .rope: return makeRope(stroke)
         case .braid: return makeBraid(stroke)
-        case .knit: return makeKnit(stroke)
         case .scales: return makeScales(stroke)
-        case .feather: return makeFeather(stroke)
         case .waves: return makeWaves(stroke)
         case .pulse: return makePulse(stroke)
         case .aurora: return makeAurora(stroke)
         case .prism: return makePrism(stroke)
-        case .galaxy: return makeGalaxy(stroke)
+        // Uudet brushit
+        case .crystal: return makeCrystal(stroke)
+        case .lightning: return makeLightning(stroke)
+        case .shatter: return makeShatter(stroke)
+        case .orbit: return makeOrbit(stroke)
+        case .blade: return makeBlade(stroke)
+        case .fractal: return makeFractal(stroke)
+        case .mesh: return makeMesh(stroke)
+        case .spike: return makeSpike(stroke)
         }
     }
     
@@ -704,23 +704,193 @@ class StrokeRenderer {
         return parent
     }
     
-    private func makeGalaxy(_ stroke: Stroke) -> ModelEntity {
+    // Crystal - sharp crystalline shards
+    private func makeCrystal(_ stroke: Stroke) -> ModelEntity {
         let parent = ModelEntity()
         let pts = stroke.points
-        // Core
-        parent.addChild(makeTube(stroke, seg: 6))
-        // Stars around
+        for (i, p) in pts.enumerated() where i % 3 == 0 {
+            let col = pointColor(p, stroke, hueShift: Float.random(in: -0.1...0.1))
+            // Elongated prism as crystal
+            let size = p.brushSize * Float.random(in: 0.8...1.5)
+            let crystal = ModelEntity(mesh: .generateBox(size: SIMD3<Float>(size * 0.3, size * 2, size * 0.3), cornerRadius: 0), materials: [SimpleMaterial(color: col, isMetallic: true)])
+            crystal.position = p.position
+            // Random orientation for crystalline look
+            crystal.orientation = simd_quatf(angle: Float.random(in: 0...Float.pi), axis: simd_normalize(SIMD3<Float>(Float.random(in: -1...1), Float.random(in: -1...1), Float.random(in: -1...1))))
+            parent.addChild(crystal)
+        }
+        return parent
+    }
+    
+    // Lightning - jagged electric bolt
+    private func makeLightning(_ stroke: Stroke) -> ModelEntity {
+        let parent = ModelEntity()
+        let pts = stroke.points
+        for i in 1..<pts.count {
+            let p = pts[i], prev = pts[i-1]
+            let col = pointColor(p, stroke, hueShift: Float.random(in: -0.05...0.05))
+            // Main bolt segment
+            let dist = simd_distance(prev.position, p.position)
+            if dist > 0.001 {
+                let bolt = ModelEntity(mesh: .generateBox(size: SIMD3<Float>(p.brushSize * 0.3, dist, p.brushSize * 0.3), cornerRadius: 0), materials: [SimpleMaterial(color: col, isMetallic: false)])
+                bolt.position = (prev.position + p.position) / 2
+                let dir = simd_normalize(p.position - prev.position)
+                bolt.orientation = simd_quatf(from: SIMD3<Float>(0, 1, 0), to: dir)
+                parent.addChild(bolt)
+                
+                // Side branches
+                if i % 4 == 0 {
+                    let branchDir = simd_normalize(simd_cross(dir, SIMD3<Float>(Float.random(in: -1...1), Float.random(in: -1...1), Float.random(in: -1...1))))
+                    let branchLen = p.brushSize * 3
+                    let branch = ModelEntity(mesh: .generateBox(size: SIMD3<Float>(p.brushSize * 0.15, branchLen, p.brushSize * 0.15), cornerRadius: 0), materials: [SimpleMaterial(color: col, isMetallic: false)])
+                    branch.position = p.position + branchDir * branchLen * 0.5
+                    branch.orientation = simd_quatf(from: SIMD3<Float>(0, 1, 0), to: branchDir)
+                    parent.addChild(branch)
+                }
+            }
+        }
+        return parent
+    }
+    
+    // Shatter - broken glass shards
+    private func makeShatter(_ stroke: Stroke) -> ModelEntity {
+        let parent = ModelEntity()
+        let pts = stroke.points
         for (i, p) in pts.enumerated() {
-            let dir = direction(at: i, pts: pts), basis = makeBasis(dir)
-            for _ in 0..<2 {
-                let angle = Float.random(in: 0...(.pi * 2))
-                let dist = Float.random(in: 1...3) * p.brushSize
-                let offset = (basis.0 * cos(angle) + basis.1 * sin(angle)) * dist
-                let col = pointColor(p, stroke, hueShift: Float.random(in: -0.3...0.3))
-                var mat = SimpleMaterial(); mat.color = .init(tint: col); mat.metallic = .float(1)
-                let star = ModelEntity(mesh: .generateSphere(radius: p.brushSize * Float.random(in: 0.1...0.3)), materials: [mat])
-                star.position = p.position + offset
-                parent.addChild(star)
+            let col = pointColor(p, stroke, hueShift: Float.random(in: -0.15...0.15))
+            // Flat triangular shards
+            let size = p.brushSize * Float.random(in: 0.5...1.5)
+            let shard = ModelEntity(mesh: .generateBox(size: SIMD3<Float>(size, size * 0.1, size * 0.7), cornerRadius: 0), materials: [SimpleMaterial(color: col, isMetallic: true)])
+            let offset = SIMD3<Float>(Float.random(in: -1...1), Float.random(in: -1...1), Float.random(in: -1...1)) * p.brushSize
+            shard.position = p.position + offset
+            shard.orientation = simd_quatf(angle: Float.random(in: 0...Float.pi * 2), axis: simd_normalize(SIMD3<Float>(Float.random(in: -1...1), Float.random(in: -1...1), Float.random(in: -1...1))))
+            parent.addChild(shard)
+        }
+        return parent
+    }
+    
+    // Orbit - rotating rings around path
+    private func makeOrbit(_ stroke: Stroke) -> ModelEntity {
+        let parent = ModelEntity()
+        let pts = stroke.points
+        // Core tube
+        parent.addChild(makeTube(stroke, seg: 6))
+        // Orbiting rings
+        for (i, p) in pts.enumerated() where i % 5 == 0 {
+            let dir = direction(at: i, pts: pts)
+            let col = pointColor(p, stroke, hueShift: Float(i % 3) * 0.1)
+            // Torus approximation with small spheres
+            let ringRadius = p.brushSize * 2
+            for j in 0..<8 {
+                let angle = Float(j) / 8 * Float.pi * 2 + Float(i) * 0.3
+                let ringPos = p.position + SIMD3<Float>(cos(angle), 0, sin(angle)) * ringRadius
+                let orb = ModelEntity(mesh: .generateSphere(radius: p.brushSize * 0.2), materials: [SimpleMaterial(color: col, isMetallic: true)])
+                orb.position = ringPos
+                parent.addChild(orb)
+            }
+        }
+        return parent
+    }
+    
+    // Blade - sharp cutting edges
+    private func makeBlade(_ stroke: Stroke) -> ModelEntity {
+        let parent = ModelEntity()
+        let pts = stroke.points
+        for (i, p) in pts.enumerated() where i % 2 == 0 {
+            let dir = direction(at: i, pts: pts)
+            let basis = makeBasis(dir)
+            let col = pointColor(p, stroke, hueShift: Float.random(in: -0.05...0.05))
+            // Thin sharp blade
+            let blade = ModelEntity(mesh: .generateBox(size: SIMD3<Float>(p.brushSize * 3, p.brushSize * 0.1, p.brushSize * 0.8), cornerRadius: 0), materials: [SimpleMaterial(color: col, isMetallic: true)])
+            blade.position = p.position
+            blade.orientation = simd_quatf(from: SIMD3<Float>(1, 0, 0), to: dir) * simd_quatf(angle: Float(i) * 0.4, axis: dir)
+            parent.addChild(blade)
+        }
+        return parent
+    }
+    
+    // Fractal - self-similar branching
+    private func makeFractal(_ stroke: Stroke) -> ModelEntity {
+        let parent = ModelEntity()
+        let pts = stroke.points
+        for (i, p) in pts.enumerated() {
+            let col = pointColor(p, stroke, hueShift: Float(i % 4) * 0.08)
+            // Central node
+            let node = ModelEntity(mesh: .generateSphere(radius: p.brushSize * 0.3), materials: [SimpleMaterial(color: col, isMetallic: false)])
+            node.position = p.position
+            parent.addChild(node)
+            // 6 branches in cubic directions
+            if i % 3 == 0 {
+                for axis in [SIMD3<Float>(1,0,0), SIMD3<Float>(-1,0,0), SIMD3<Float>(0,1,0), SIMD3<Float>(0,-1,0), SIMD3<Float>(0,0,1), SIMD3<Float>(0,0,-1)] {
+                    let branchLen = p.brushSize * 1.5
+                    let branch = ModelEntity(mesh: .generateBox(size: SIMD3<Float>(p.brushSize * 0.1, branchLen, p.brushSize * 0.1), cornerRadius: 0), materials: [SimpleMaterial(color: col, isMetallic: false)])
+                    branch.position = p.position + axis * branchLen * 0.5
+                    branch.orientation = simd_quatf(from: SIMD3<Float>(0, 1, 0), to: axis)
+                    parent.addChild(branch)
+                }
+            }
+        }
+        return parent
+    }
+    
+    // Mesh - wireframe grid structure
+    private func makeMesh(_ stroke: Stroke) -> ModelEntity {
+        let parent = ModelEntity()
+        let pts = stroke.points
+        for i in 0..<pts.count {
+            let p = pts[i]
+            let col = pointColor(p, stroke)
+            // Grid node
+            let node = ModelEntity(mesh: .generateBox(size: SIMD3<Float>(p.brushSize * 0.2, p.brushSize * 0.2, p.brushSize * 0.2), cornerRadius: 0), materials: [SimpleMaterial(color: col, isMetallic: true)])
+            node.position = p.position
+            parent.addChild(node)
+            // Connect to previous point
+            if i > 0 {
+                let prev = pts[i-1]
+                let dist = simd_distance(prev.position, p.position)
+                if dist > 0.001 {
+                    let wire = ModelEntity(mesh: .generateBox(size: SIMD3<Float>(p.brushSize * 0.05, dist, p.brushSize * 0.05), cornerRadius: 0), materials: [SimpleMaterial(color: col, isMetallic: true)])
+                    wire.position = (prev.position + p.position) / 2
+                    let dir = simd_normalize(p.position - prev.position)
+                    wire.orientation = simd_quatf(from: SIMD3<Float>(0, 1, 0), to: dir)
+                    parent.addChild(wire)
+                }
+            }
+            // Cross connections
+            if i % 4 == 0 && i > 0 {
+                let basis = makeBasis(direction(at: i, pts: pts))
+                for crossDir in [basis.0, basis.1, -basis.0, -basis.1] {
+                    let crossLen = p.brushSize * 1.5
+                    let cross = ModelEntity(mesh: .generateBox(size: SIMD3<Float>(p.brushSize * 0.03, crossLen, p.brushSize * 0.03), cornerRadius: 0), materials: [SimpleMaterial(color: col, isMetallic: true)])
+                    cross.position = p.position + crossDir * crossLen * 0.5
+                    cross.orientation = simd_quatf(from: SIMD3<Float>(0, 1, 0), to: crossDir)
+                    parent.addChild(cross)
+                }
+            }
+        }
+        return parent
+    }
+    
+    // Spike - sharp protruding spikes
+    private func makeSpike(_ stroke: Stroke) -> ModelEntity {
+        let parent = ModelEntity()
+        let pts = stroke.points
+        // Core tube
+        parent.addChild(makeTube(stroke, seg: 6))
+        // Spikes
+        for (i, p) in pts.enumerated() where i % 2 == 0 {
+            let dir = direction(at: i, pts: pts)
+            let basis = makeBasis(dir)
+            let col = pointColor(p, stroke, hueShift: Float.random(in: -0.1...0.1))
+            // Multiple spikes around
+            for j in 0..<4 {
+                let angle = Float(j) / 4 * Float.pi * 2 + Float(i) * 0.2
+                let spikeDir = basis.0 * cos(angle) + basis.1 * sin(angle)
+                let spikeLen = p.brushSize * Float.random(in: 1.5...3.0)
+                // Tapered spike (cone approximation with thin box)
+                let spike = ModelEntity(mesh: .generateBox(size: SIMD3<Float>(p.brushSize * 0.15, spikeLen, p.brushSize * 0.15), cornerRadius: 0), materials: [SimpleMaterial(color: col, isMetallic: true)])
+                spike.position = p.position + spikeDir * spikeLen * 0.5
+                spike.orientation = simd_quatf(from: SIMD3<Float>(0, 1, 0), to: spikeDir)
+                parent.addChild(spike)
             }
         }
         return parent

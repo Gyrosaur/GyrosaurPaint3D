@@ -45,6 +45,12 @@ struct ContentView: View {
     @State private var toolRowAtBottom = false  // Tool row sijainti
     @State private var colorRowAtBottom = false  // Color row sijainti
     @State private var arViewRef: ARView?
+    @State private var screenshotFreezeTime: Double = 0.15  // Freeze duration in seconds
+    @State private var showFreezeSlider = false
+    @State private var isScreenshotFreezing = false
+    @State private var showColorWheel = false
+    @State private var colorWheelHue: CGFloat = 0
+    @State private var colorWheelSaturation: CGFloat = 1
     
     @Binding var shouldExit: Bool
     
@@ -67,8 +73,23 @@ struct ContentView: View {
         controllerManager.$dpadDown.sink { [self] p in if p { handleDpadDown() } }.store(in: &controllerCancellables)
         controllerManager.$dpadLeft.sink { [self] p in if p { handleDpadLeft() } }.store(in: &controllerCancellables)
         controllerManager.$dpadRight.sink { [self] p in if p { handleDpadRight() } }.store(in: &controllerCancellables)
-        controllerManager.$leftStickX.sink { [self] _ in handleLeftStick() }.store(in: &controllerCancellables)
-        controllerManager.$leftStickY.sink { [self] _ in handleLeftStick() }.store(in: &controllerCancellables)
+        
+        // Left stick - color wheel control when open
+        controllerManager.$leftStickX.sink { [self] _ in 
+            if showColorWheel {
+                handleColorWheelStick()
+            } else {
+                handleLeftStick() 
+            }
+        }.store(in: &controllerCancellables)
+        controllerManager.$leftStickY.sink { [self] _ in 
+            if showColorWheel {
+                handleColorWheelStick()
+            } else {
+                handleLeftStick() 
+            }
+        }.store(in: &controllerCancellables)
+        
         controllerManager.$rightStickX.sink { [self] v in 
             if !selectionManager.isSelectionMode {
                 drawingEngine.opacity = max(0.1, min(1.0, (v + 1) / 2)) 
@@ -248,6 +269,11 @@ struct ContentView: View {
                 effectLayer
             }
             
+            // Left edge opacity slider - always available during drawing
+            if !hideUI {
+                leftEdgeOpacitySlider
+            }
+            
             // Recording layer - hidden when hideUI
             if !hideUI {
                 recordingLayer
@@ -258,12 +284,7 @@ struct ContentView: View {
             }
             toastLayer
             
-            // Drawing lock handle (left edge)
-            if !hideUI && (drawingMode == .straightLine || drawingMode == .arc || drawingMode == .crescendo || drawingMode == .diminuendo) {
-                drawingLockHandle
-            }
-            
-            // Eye icon to show/hide UI - always visible
+            // Eye icon and crosshair toggle - always visible
             eyeToggleButton
             
             // Image crop overlay
@@ -293,6 +314,12 @@ struct ContentView: View {
                     }
                 )
             }
+            
+            // Color wheel picker overlay
+            if showColorWheel {
+                colorWheelOverlay
+                    .transition(.opacity)
+            }
         }
         .statusBarHidden(recordingManager.isRecording || hideUI)
     }
@@ -302,13 +329,26 @@ struct ContentView: View {
             Spacer()
             HStack {
                 Spacer()
-                Button(action: { hideUI.toggle() }) {
-                    Image(systemName: hideUI ? "eye.slash.fill" : "eye.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(.white.opacity(0.7))
-                        .padding(10)
-                        .background(Color.black.opacity(hideUI ? 0.3 : 0.5))
-                        .clipShape(Circle())
+                VStack(spacing: 12) {
+                    // Crosshair toggle above eye
+                    Button(action: { showCrosshair.toggle() }) {
+                        Image(systemName: showCrosshair ? "plus.circle.fill" : "plus.circle")
+                            .font(.system(size: 16))
+                            .foregroundColor(.white.opacity(0.7))
+                            .padding(10)
+                            .background(Color.black.opacity(0.5))
+                            .clipShape(Circle())
+                    }
+                    
+                    // Eye toggle
+                    Button(action: { hideUI.toggle() }) {
+                        Image(systemName: hideUI ? "eye.slash.fill" : "eye.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(.white.opacity(0.7))
+                            .padding(10)
+                            .background(Color.black.opacity(hideUI ? 0.3 : 0.5))
+                            .clipShape(Circle())
+                    }
                 }
                 .padding(.trailing, 16)
                 .padding(.bottom, hideUI ? 30 : 100)
@@ -369,6 +409,70 @@ struct ContentView: View {
         }
     }
     
+    // Left edge opacity slider - drag up/down to change opacity
+    var leftEdgeOpacitySlider: some View {
+        HStack {
+            // Invisible touch area on left edge
+            GeometryReader { geo in
+                let sliderHeight: CGFloat = geo.size.height * 0.55
+                let topOffset: CGFloat = 100
+                
+                ZStack(alignment: .leading) {
+                    // Touch area - wider
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(width: 60, height: sliderHeight)
+                        .contentShape(Rectangle())
+                        .position(x: 30, y: topOffset + sliderHeight / 2)
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    let relativeY = (value.location.y - topOffset) / sliderHeight
+                                    let newOpacity = 1.0 - max(0, min(1, relativeY))
+                                    drawingEngine.opacity = Float(newOpacity)
+                                }
+                        )
+                    
+                    // Track background - more transparent
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.25), Color.white.opacity(0.05)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(width: 8, height: sliderHeight)
+                        .position(x: 10, y: topOffset + sliderHeight / 2)
+                    
+                    // Current value indicator - more subtle
+                    Circle()
+                        .fill(Color.white.opacity(0.5))
+                        .frame(width: 16, height: 16)
+                        .overlay(
+                            Circle().stroke(Color.white.opacity(0.3), lineWidth: 1)
+                        )
+                        .shadow(color: .black.opacity(0.2), radius: 2)
+                        .position(
+                            x: 10,
+                            y: topOffset + sliderHeight * CGFloat(1.0 - drawingEngine.opacity)
+                        )
+                    
+                    // Opacity percentage label - more transparent
+                    Text("\(Int(drawingEngine.opacity * 100))")
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.5))
+                        .position(
+                            x: 35,
+                            y: topOffset + sliderHeight * CGFloat(1.0 - drawingEngine.opacity)
+                        )
+                }
+            }
+            
+            Spacer()
+        }
+    }
+    
     var arLayer: some View {
         ARViewContainerWithRef(
             drawingEngine: drawingEngine,
@@ -383,68 +487,169 @@ struct ContentView: View {
     }
     
     var recordingLayer: some View {
-        VStack {
-            Spacer()
-            HStack(spacing: 16) {
-                // Screenshot button
-                Button(action: { takeScreenshotToGallery() }) {
-                    Image(systemName: "camera.fill")
-                        .font(.system(size: 18))
-                        .foregroundColor(.white)
-                        .frame(width: 50, height: 50)
-                        .background(Color.black.opacity(0.6))
-                        .clipShape(Circle())
-                }
-                
-                // Record button
-                Button(action: {
-                    if recordingManager.isRecording { recordingManager.stopRecording() }
-                    else { recordingManager.startRecording() }
-                }) {
-                    ZStack {
-                        Circle().fill(Color.black.opacity(0.6)).frame(width: 70, height: 70)
-                        if recordingManager.isRecording {
-                            RoundedRectangle(cornerRadius: 4).fill(Color.red).frame(width: 24, height: 24)
-                        } else {
-                            Circle().fill(Color.red).frame(width: 30, height: 30)
+        ZStack {
+            // Screenshot freeze overlay
+            if screenshotManager.isFreezing {
+                Color.white.opacity(0.3)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
+            
+            // Left bottom corner - status icons (AirPods, Controller, Performance)
+            VStack {
+                Spacer()
+                HStack {
+                    VStack(spacing: 6) {
+                        // Performance indicator
+                        Button(action: { showPerformanceSettings = true }) {
+                            ZStack {
+                                Circle()
+                                    .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.gray.opacity(0.4), Color.black.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    .frame(width: 32, height: 32)
+                                Circle()
+                                    .fill(RadialGradient(colors: [Color.white.opacity(0.25), Color.clear], center: .topLeading, startRadius: 0, endRadius: 20))
+                                    .frame(width: 30, height: 30)
+                                Image(systemName: performanceManager.currentLevel.icon)
+                                    .font(.system(size: 14))
+                                    .foregroundColor(performanceManager.currentLevel.color)
+                            }
                         }
-                    }
-                }
-                .disabled(!recordingManager.canRecord)
-                
-                // Background mode button (cycle through modes)
-                Button(action: { cycleBackgroundMode() }) {
-                    ZStack {
-                        Circle()
-                            .fill(backgroundModeColor)
-                            .frame(width: 44, height: 44)
-                        if cameraSettings.backgroundMode == .ar {
-                            Text("AR").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
+                        
+                        // Controller icon
+                        if controllerManager.isConnected {
+                            ZStack {
+                                Circle()
+                                    .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.gray.opacity(0.4), Color.black.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    .frame(width: 32, height: 32)
+                                Circle()
+                                    .fill(RadialGradient(colors: [Color.white.opacity(0.25), Color.clear], center: .topLeading, startRadius: 0, endRadius: 20))
+                                    .frame(width: 30, height: 30)
+                                Image(systemName: "gamecontroller.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.green)
+                            }
                         }
+                        
+                        // AirPods icon
+                        AirPodsStatusView(manager: airPodsManager)
                     }
-                    .overlay(Circle().stroke(Color.white.opacity(0.5), lineWidth: 1))
-                }
-                
-                // Gallery button
-                Button(action: { showGallery = true }) {
-                    Image(systemName: "photo.stack")
-                        .font(.system(size: 18))
-                        .foregroundColor(.white)
-                        .frame(width: 44, height: 44)
-                        .background(Color.black.opacity(0.6))
-                        .clipShape(Circle())
-                }
-                
-                // Recording time
-                if recordingManager.isRecording {
-                    Text(formatTime(recordingManager.recordingTime))
-                        .font(.system(size: 14, weight: .bold, design: .monospaced))
-                        .foregroundColor(.red)
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(Color.black.opacity(0.6)).cornerRadius(6)
+                    .padding(.leading, 12)
+                    .padding(.bottom, 100)
+                    
+                    Spacer()
                 }
             }
-            .padding(.bottom, 30)
+            
+            VStack {
+                // Freeze slider at top when shown
+                if showFreezeSlider {
+                    VStack(spacing: 4) {
+                        Text("Screenshot Freeze: \(String(format: "%.2f", screenshotFreezeTime))s")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white)
+                        Slider(value: $screenshotFreezeTime, in: 0.01...0.12, step: 0.005)
+                            .frame(width: 150)
+                            .accentColor(.cyan)
+                        Button("Hide") { showFreezeSlider = false }
+                            .font(.system(size: 11))
+                            .foregroundColor(.gray)
+                    }
+                    .padding(12)
+                    .background(Color.black.opacity(0.8))
+                    .cornerRadius(12)
+                    .padding(.top, 120)
+                }
+                
+                Spacer()
+                
+                HStack(spacing: 16) {
+                    // Screenshot button - long press shows freeze slider
+                    Button(action: { takeScreenshotToGallery() }) {
+                        ZStack {
+                            Circle()
+                                .fill(LinearGradient(colors: [Color.white.opacity(0.25), Color.gray.opacity(0.4), Color.black.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .frame(width: 50, height: 50)
+                            Circle()
+                                .fill(RadialGradient(colors: [Color.white.opacity(0.3), Color.clear], center: .topLeading, startRadius: 0, endRadius: 30))
+                                .frame(width: 48, height: 48)
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 18))
+                                .foregroundColor(.white)
+                                .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+                        }
+                    }
+                    .simultaneousGesture(
+                        LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+                            showFreezeSlider.toggle()
+                        }
+                    )
+                    
+                    // Record button
+                    Button(action: {
+                        if recordingManager.isRecording { recordingManager.stopRecording() }
+                        else { recordingManager.startRecording() }
+                    }) {
+                        ZStack {
+                            Circle()
+                                .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.gray.opacity(0.35), Color.black.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .frame(width: 70, height: 70)
+                            Circle()
+                                .fill(RadialGradient(colors: [Color.white.opacity(0.2), Color.clear], center: .topLeading, startRadius: 0, endRadius: 40))
+                                .frame(width: 68, height: 68)
+                            if recordingManager.isRecording {
+                                RoundedRectangle(cornerRadius: 4).fill(Color.red).frame(width: 24, height: 24)
+                            } else {
+                                Circle().fill(Color.red).frame(width: 30, height: 30)
+                            }
+                        }
+                    }
+                    .disabled(!recordingManager.canRecord)
+                    
+                    // Background mode button - with gray border for white mode
+                    Button(action: { cycleBackgroundMode() }) {
+                        ZStack {
+                            Circle()
+                                .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.gray.opacity(0.35), Color.black.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .frame(width: 48, height: 48)
+                            Circle()
+                                .fill(backgroundModeColor)
+                                .frame(width: 40, height: 40)
+                            Circle()
+                                .stroke(Color.gray.opacity(0.6), lineWidth: 2)
+                                .frame(width: 40, height: 40)
+                            if cameraSettings.backgroundMode == .ar {
+                                Text("AR").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
+                            }
+                        }
+                    }
+                    
+                    // Gallery button
+                    Button(action: { showGallery = true }) {
+                        ZStack {
+                            Circle()
+                                .fill(LinearGradient(colors: [Color.white.opacity(0.25), Color.gray.opacity(0.4), Color.black.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .frame(width: 44, height: 44)
+                            Circle()
+                                .fill(RadialGradient(colors: [Color.white.opacity(0.3), Color.clear], center: .topLeading, startRadius: 0, endRadius: 25))
+                                .frame(width: 42, height: 42)
+                            Image(systemName: "photo.stack")
+                                .font(.system(size: 18))
+                                .foregroundColor(.white)
+                                .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+                        }
+                    }
+                    
+                    // Recording time
+                    if recordingManager.isRecording {
+                        Text(formatTime(recordingManager.recordingTime))
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundColor(.red)
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(Color.black.opacity(0.6)).cornerRadius(6)
+                    }
+                }
+                .padding(.bottom, 30)
+            }
         }
     }
     
@@ -466,8 +671,19 @@ struct ContentView: View {
     
     func takeScreenshotToGallery() {
         guard let arView = arViewRef else { return }
+        
+        // Haptic feedback
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+        
+        // Start freeze effect
+        screenshotManager.isFreezing = true
+        
         arView.snapshot(saveToHDR: false) { [self] image in
-            guard let image = image else { return }
+            guard let image = image else { 
+                Task { @MainActor in screenshotManager.isFreezing = false }
+                return 
+            }
             // Save to internal gallery
             _ = galleryManager.saveImage(
                 image,
@@ -481,6 +697,10 @@ struct ContentView: View {
                 }
             }
             Task { @MainActor in
+                // Keep freeze for configured duration
+                try? await Task.sleep(nanoseconds: UInt64(screenshotFreezeTime * 1_000_000_000))
+                screenshotManager.isFreezing = false
+                
                 screenshotManager.showSaveSuccess = true
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 screenshotManager.showSaveSuccess = false
@@ -503,7 +723,7 @@ struct ContentView: View {
     
     var topBarLayer: some View {
         VStack(spacing: 0) {
-            VStack(spacing: 6) {
+            VStack(spacing: 4) {
                 if !toolRowAtBottom {
                     DraggableToolRow(
                         content: AnyView(toolRow),
@@ -519,7 +739,7 @@ struct ContentView: View {
                     )
                 }
             }
-            .padding(.top, 50)
+            .padding(.top, 4)
             Spacer()
         }
     }
@@ -599,128 +819,122 @@ struct ContentView: View {
 // MARK: - Top Bar
 extension ContentView {
     var compactTopBar: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 4) {
             toolRow
             colorRow
         }
-        .padding(.top, 50)
+        .padding(.top, 2)
     }
     
     var toolRow: some View {
-        HStack(spacing: 10) {
-            // AirPods ja controller ikonit vasemmalla
-            HStack(spacing: 6) {
-                AirPodsStatusView(manager: airPodsManager)
-                if controllerManager.isConnected {
-                    Image(systemName: "gamecontroller.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(.green)
-                        .padding(4)
-                        .background(Color.black.opacity(0.5))
-                        .cornerRadius(4)
-                }
-                
-                // Performance indicator
-                Button(action: { showPerformanceSettings = true }) {
-                    Image(systemName: performanceManager.currentLevel.icon)
-                        .font(.system(size: 12))
-                        .foregroundColor(performanceManager.currentLevel.color)
-                        .padding(4)
-                        .background(Color.black.opacity(0.5))
-                        .cornerRadius(4)
-                }
-            }
-            
+        HStack(spacing: 8) {
             Spacer()
             
-            // Crosshair toggle
-            SmallToolBtn(icon: "plus.circle", size: 30, hl: showCrosshair) { showCrosshair.toggle() }
+            SmallToolBtn(icon: drawingMode.icon, size: 32, hl: drawingMode != .freehand) { showDrawingModes.toggle() }
+            SmallToolBtn(icon: drawingEngine.selectedBrushType.icon, size: 32) { showBrushPicker.toggle() }
+            SmallToolBtn(icon: "square.and.arrow.up", size: 32) { showExport = true }
+            SmallToolBtn(icon: "arrow.uturn.backward", size: 32) { drawingEngine.undoLastStroke() }
+            SmallToolBtn(icon: "trash", size: 32) { drawingEngine.clearAllStrokes() }
             
-            // Selector tool
-            SmallToolBtn(icon: "hand.tap", size: 30, hl: selectionManager.isSelectionMode) { 
-                selectionManager.toggleSelectionMode() 
-            }
-            
-            SmallToolBtn(icon: drawingMode.icon, size: 30, hl: drawingMode != .freehand) { showDrawingModes.toggle() }
-            SmallToolBtn(icon: drawingEngine.selectedBrushType.icon, size: 30) { showBrushPicker.toggle() }
-            SmallToolBtn(icon: "square.and.arrow.up", size: 30) { showExport = true }
-            SmallToolBtn(icon: "arrow.uturn.backward", size: 30) { drawingEngine.undoLastStroke() }
-            SmallToolBtn(icon: "trash", size: 30) { drawingEngine.clearAllStrokes() }
-            
-            // UI Edit mode toggle
-            SmallToolBtn(icon: "slider.horizontal.3", size: 30, hl: uiEditMode) { 
-                withAnimation(.spring(response: 0.3)) { uiEditMode.toggle() }
-            }
+            Spacer()
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 8)
     }
     
     var colorRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                // Controller color indicator (if active)
-                if drawingEngine.controllerColor != nil {
-                    ZStack {
-                        Circle()
-                            .fill(drawingEngine.controllerColor!)
-                            .frame(width: 28, height: 28)
-                        Circle()
-                            .stroke(Color.white, lineWidth: 2)
-                            .frame(width: 28, height: 28)
-                        Circle()
-                            .stroke(Color.black, lineWidth: 1)
-                            .frame(width: 32, height: 32)
-                        Image(systemName: "gamecontroller")
-                            .font(.system(size: 10))
-                            .foregroundColor(.white.opacity(0.8))
+        HStack {
+            Spacer()
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    // Controller color indicator - wheel icon with color center
+                    if drawingEngine.controllerColor != nil {
+                        ZStack {
+                            // Rainbow ring
+                            Circle()
+                                .fill(
+                                    AngularGradient(
+                                        colors: [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .red],
+                                        center: .center
+                                    )
+                                )
+                                .frame(width: 28, height: 28)
+                            // Selected color center
+                            Circle()
+                                .fill(drawingEngine.controllerColor!)
+                                .frame(width: 16, height: 16)
+                            // 3D effect
+                            Circle()
+                                .fill(
+                                    RadialGradient(
+                                        colors: [Color.white.opacity(0.4), Color.clear],
+                                        center: .topLeading,
+                                        startRadius: 0,
+                                        endRadius: 10
+                                    )
+                                )
+                                .frame(width: 14, height: 14)
+                            // Selection ring
+                            Circle()
+                                .stroke(Color.white, lineWidth: 2)
+                                .frame(width: 30, height: 30)
+                        }
+                    }
+                    
+                    // Color wheel button (rainbow circle)
+                    colorWheelButton
+                    
+                    // Regular colors
+                    ForEach(drawingEngine.availableColors.indices, id: \.self) { i in
+                        colorCircle(index: i)
                     }
                 }
-                
-                // Paint from image button (rainbow circle)
-                paintImageButton
-                
-                // Regular colors
-                ForEach(drawingEngine.availableColors.indices, id: \.self) { i in
-                    colorCircle(index: i)
-                }
-                if !drawingEngine.imageColors.isEmpty {
-                    imageColorButton
-                }
+                .padding(.horizontal, 8)
             }
-            .padding(.horizontal, 12)
         }
     }
     
-    var paintImageButton: some View {
-        // Rainbow gradient circle for "paint from image"
-        Button(action: { showPaintImagePicker = true }) {
+    var colorWheelButton: some View {
+        Button(action: { showColorWheel.toggle() }) {
             ZStack {
+                // Rainbow gradient
                 Circle()
                     .fill(
                         AngularGradient(
-                            colors: [.red, .orange, .yellow, .green, .blue, .purple, .red],
+                            colors: [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .red],
                             center: .center
                         )
                     )
                     .frame(width: 28, height: 28)
-                if imagePaintSource.isActive {
+                // 3D highlight
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color.white.opacity(0.5), Color.clear],
+                            center: .topLeading,
+                            startRadius: 0,
+                            endRadius: 18
+                        )
+                    )
+                    .frame(width: 26, height: 26)
+                // Bottom shadow
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color.clear, Color.black.opacity(0.3)],
+                            center: .center,
+                            startRadius: 10,
+                            endRadius: 14
+                        )
+                    )
+                    .frame(width: 28, height: 28)
+                // Selection indicator
+                if showColorWheel {
                     Circle()
-                        .stroke(Color.white, lineWidth: 3)
-                        .frame(width: 28, height: 28)
+                        .stroke(Color.white, lineWidth: 2)
+                        .frame(width: 30, height: 30)
                 }
             }
         }
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.5)
-                .onEnded { _ in
-                    if imagePaintSource.sourceImage != nil {
-                        tempPaintImage = imagePaintSource.sourceImage
-                        showImageCrop = true
-                    } else {
-                        showPaintImagePicker = true
-                    }
-                }
-        )
     }
     
     func handlePaintImagePick(_ item: PhotosPickerItem?) {
@@ -736,47 +950,68 @@ extension ContentView {
     
     func colorCircle(index: Int) -> some View {
         let selected = drawingEngine.selectedColorIndex == index && !drawingEngine.useImageColors && drawingEngine.controllerColor == nil
+        let color = drawingEngine.availableColors[index]
         return ZStack {
+            // Outer shadow for depth
             Circle()
-                .fill(drawingEngine.availableColors[index])
+                .fill(Color.black.opacity(0.4))
+                .frame(width: 30, height: 30)
+                .offset(x: 1, y: 2)
+                .blur(radius: 2)
+            
+            // Base color
+            Circle()
+                .fill(color)
                 .frame(width: 28, height: 28)
+            
+            // Inner gradient for sphere effect
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [color.opacity(0.3), Color.clear, color.opacity(0.1)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 28, height: 28)
+            
+            // Top-left specular highlight (glossy)
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [Color.white.opacity(0.7), Color.white.opacity(0.2), Color.clear],
+                        center: UnitPoint(x: 0.3, y: 0.25),
+                        startRadius: 0,
+                        endRadius: 14
+                    )
+                )
+                .frame(width: 26, height: 26)
+            
+            // Rim light at bottom
+            Circle()
+                .stroke(
+                    LinearGradient(
+                        colors: [Color.clear, Color.white.opacity(0.3), Color.clear],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                )
+                .frame(width: 27, height: 27)
+            
             if selected {
                 Circle()
-                    .stroke(Color.white, lineWidth: 2)
-                    .frame(width: 28, height: 28)
-                Circle()
-                    .stroke(Color.black, lineWidth: 1)
+                    .stroke(Color.white, lineWidth: 2.5)
                     .frame(width: 32, height: 32)
+                Circle()
+                    .stroke(Color.black.opacity(0.4), lineWidth: 1)
+                    .frame(width: 36, height: 36)
             }
         }
         .onTapGesture { 
             drawingEngine.selectedColorIndex = index
             drawingEngine.useImageColors = false
             drawingEngine.clearControllerColor()
-        }
-    }
-    
-    var imageColorButton: some View {
-        let colors = Array(drawingEngine.imageColors.prefix(6))
-        let selected = drawingEngine.useImageColors
-        return ZStack {
-            LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing)
-                .frame(width: 44, height: 28)
-                .clipShape(RoundedRectangle(cornerRadius: 4))
-            if selected {
-                RoundedRectangle(cornerRadius: 4)
-                    .stroke(Color.white, lineWidth: 2)
-                    .frame(width: 44, height: 28)
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color.black, lineWidth: 1)
-                    .frame(width: 48, height: 32)
-            }
-        }
-        .onTapGesture { 
-            drawingEngine.useImageColors.toggle()
-            if drawingEngine.useImageColors {
-                drawingEngine.clearControllerColor()
-            }
         }
     }
 }
@@ -932,6 +1167,128 @@ extension ContentView {
             onConfirm: { drawingEngine.loadImageColors(); showImageSelector = false },
             onCancel: { drawingEngine.imageSelection.selectedImage = nil; showImageSelector = false })
     }
+    
+    // Color wheel popup overlay
+    var colorWheelOverlay: some View {
+        ZStack {
+            // Background tap to dismiss
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture { showColorWheel = false }
+            
+            VStack {
+                Spacer().frame(height: 140)
+                
+                HStack {
+                    Spacer()
+                    ColorWheelPickerView(
+                        hue: $colorWheelHue,
+                        saturation: $colorWheelSaturation,
+                        onColorSelected: { color in
+                            drawingEngine.controllerColor = color
+                        }
+                    )
+                    .frame(width: 200, height: 220)
+                    .padding(.trailing, 20)
+                }
+                
+                Spacer()
+            }
+        }
+    }
+}
+
+// MARK: - Color Wheel Picker View
+struct ColorWheelPickerView: View {
+    @Binding var hue: CGFloat
+    @Binding var saturation: CGFloat
+    var onColorSelected: (Color) -> Void
+    
+    var selectedColor: Color {
+        Color(hue: hue, saturation: saturation, brightness: 1.0)
+    }
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            // Color wheel
+            ZStack {
+                // Background
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(white: 0.2), Color(white: 0.1)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                
+                VStack(spacing: 10) {
+                    // Color wheel circle
+                    ZStack {
+                        Circle()
+                            .fill(
+                                AngularGradient(
+                                    colors: [.red, .yellow, .green, .cyan, .blue, .purple, .red],
+                                    center: .center
+                                )
+                            )
+                            .frame(width: 140, height: 140)
+                        
+                        // Saturation overlay (white center)
+                        Circle()
+                            .fill(
+                                RadialGradient(
+                                    colors: [.white, .clear],
+                                    center: .center,
+                                    startRadius: 0,
+                                    endRadius: 70
+                                )
+                            )
+                            .frame(width: 140, height: 140)
+                        
+                        // Selection indicator
+                        Circle()
+                            .stroke(Color.white, lineWidth: 3)
+                            .frame(width: 20, height: 20)
+                            .offset(
+                                x: cos(hue * .pi * 2 - .pi / 2) * saturation * 60,
+                                y: sin(hue * .pi * 2 - .pi / 2) * saturation * 60
+                            )
+                            .shadow(color: .black.opacity(0.5), radius: 2)
+                    }
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                let center = CGPoint(x: 70, y: 70)
+                                let dx = value.location.x - center.x
+                                let dy = value.location.y - center.y
+                                let angle = atan2(dy, dx)
+                                hue = CGFloat((angle + .pi / 2) / (.pi * 2))
+                                if hue < 0 { hue += 1 }
+                                saturation = min(1, sqrt(dx*dx + dy*dy) / 70)
+                                onColorSelected(selectedColor)
+                            }
+                    )
+                    
+                    // Selected color preview
+                    HStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(selectedColor)
+                            .frame(width: 50, height: 30)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                            )
+                        
+                        Text("Selected")
+                            .font(.system(size: 12))
+                            .foregroundColor(.gray)
+                    }
+                }
+                .padding(12)
+            }
+        }
+    }
 }
 
 // MARK: - Handlers
@@ -984,18 +1341,85 @@ extension ContentView {
         drawingEngine.clearControllerColor()
         // Väri pysyy samana kuin ennen controller-säätöä (selectedColorIndex säilyy)
     }
+    
+    // Color wheel stick control - slow by default, faster when stick pressed
+    func handleColorWheelStick() {
+        let x = controllerManager.leftStickX
+        let y = controllerManager.leftStickY
+        
+        // Calculate magnitude for speed
+        let magnitude = sqrt(x * x + y * y)
+        guard magnitude > 0.1 else { return }
+        
+        // Base speed is very slow, faster when stick fully pressed
+        let speed: CGFloat = magnitude > 0.9 ? 0.015 : 0.003
+        
+        // Update hue based on X axis
+        colorWheelHue += CGFloat(x) * speed
+        if colorWheelHue > 1 { colorWheelHue -= 1 }
+        if colorWheelHue < 0 { colorWheelHue += 1 }
+        
+        // Update saturation based on Y axis (inverted)
+        colorWheelSaturation = max(0.1, min(1.0, colorWheelSaturation - CGFloat(y) * speed * 2))
+        
+        // Apply color
+        let color = Color(hue: colorWheelHue, saturation: colorWheelSaturation, brightness: 1.0)
+        drawingEngine.controllerColor = color
+    }
 }
 
-// MARK: - Small Tool Button
+// MARK: - Small Tool Button with metallic gradient
 struct SmallToolBtn: View {
     let icon: String
     var size: CGFloat = 32
     var hl: Bool = false
     let action: () -> Void
+    
     var body: some View {
         Button(action: action) {
-            Image(systemName: icon).font(.system(size: size * 0.5)).foregroundColor(hl ? .yellow : .white)
-                .frame(width: size, height: size).background(Color.black.opacity(0.5)).clipShape(Circle())
+            ZStack {
+                // Metallic gradient background - darker for visibility on white
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: hl ? [Color.yellow.opacity(0.95), Color.orange.opacity(0.8), Color.yellow.opacity(0.6)] 
+                                      : [Color(white: 0.55), Color(white: 0.35), Color(white: 0.2)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: size, height: size)
+                
+                // Inner highlight for 3D effect
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color.white.opacity(0.4), Color.clear],
+                            center: .topLeading,
+                            startRadius: 0,
+                            endRadius: size * 0.6
+                        )
+                    )
+                    .frame(width: size - 2, height: size - 2)
+                
+                // Subtle inner shadow at bottom
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color.clear, Color.black.opacity(0.2)],
+                            center: .center,
+                            startRadius: size * 0.3,
+                            endRadius: size * 0.5
+                        )
+                    )
+                    .frame(width: size, height: size)
+                
+                // Icon
+                Image(systemName: icon)
+                    .font(.system(size: size * 0.5, weight: .medium))
+                    .foregroundColor(hl ? .black : .white)
+                    .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+            }
         }
     }
 }
@@ -1301,12 +1725,30 @@ extension RecordingManager: RPPreviewViewControllerDelegate {
 class ScreenshotManager: ObservableObject {
     @Published var showSaveSuccess = false
     @Published var errorMessage: String?
+    @Published var isFreezing = false
     
-    func takeScreenshot(from arView: ARView) {
+    func takeScreenshot(from arView: ARView, freezeDuration: Double = 0.15, onFreeze: (() -> Void)? = nil) {
+        // Trigger haptic
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+        
+        // Signal freeze start
+        isFreezing = true
+        onFreeze?()
+        
         arView.snapshot(saveToHDR: false) { [weak self] image in
             Task { @MainActor in
-                guard let image = image else { self?.errorMessage = "Screenshot failed"; return }
+                guard let image = image else { 
+                    self?.errorMessage = "Screenshot failed"
+                    self?.isFreezing = false
+                    return 
+                }
                 self?.saveToPhotos(image)
+                
+                // Keep freeze for duration
+                DispatchQueue.main.asyncAfter(deadline: .now() + freezeDuration) {
+                    self?.isFreezing = false
+                }
             }
         }
     }
@@ -1328,27 +1770,53 @@ struct RecordingControlsView: View {
     @ObservedObject var recordingManager: RecordingManager
     @ObservedObject var screenshotManager: ScreenshotManager
     let onScreenshot: () -> Void
+    @Binding var freezeTime: Double
+    @Binding var showFreezeSlider: Bool
     
     var body: some View {
-        HStack(spacing: 16) {
-            Button(action: onScreenshot) {
-                Image(systemName: "camera.fill").font(.system(size: 20)).foregroundColor(.white)
-                    .frame(width: 50, height: 50).background(Color.black.opacity(0.6)).clipShape(Circle())
-            }
-            Button(action: { recordingManager.isRecording ? recordingManager.stopRecording() : recordingManager.startRecording() }) {
-                ZStack {
-                    Circle().fill(Color.black.opacity(0.6)).frame(width: 70, height: 70)
-                    if recordingManager.isRecording {
-                        RoundedRectangle(cornerRadius: 4).fill(Color.red).frame(width: 24, height: 24)
-                    } else {
-                        Circle().fill(Color.red).frame(width: 30, height: 30)
-                    }
+        VStack(spacing: 8) {
+            // Freeze time slider (väliaikainen)
+            if showFreezeSlider {
+                VStack(spacing: 4) {
+                    Text("Freeze: \(String(format: "%.2f", freezeTime))s")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white)
+                    Slider(value: $freezeTime, in: 0.05...0.5, step: 0.01)
+                        .frame(width: 120)
+                        .accentColor(.cyan)
                 }
-            }.disabled(!recordingManager.canRecord)
-            if recordingManager.isRecording {
-                Text(String(format: "%02d:%02d.%d", Int(recordingManager.recordingTime) / 60, Int(recordingManager.recordingTime) % 60, Int((recordingManager.recordingTime.truncatingRemainder(dividingBy: 1)) * 10)))
-                    .font(.system(size: 14, weight: .bold, design: .monospaced)).foregroundColor(.red)
-                    .padding(.horizontal, 8).padding(.vertical, 4).background(Color.black.opacity(0.6)).cornerRadius(6)
+                .padding(8)
+                .background(Color.black.opacity(0.7))
+                .cornerRadius(8)
+            }
+            
+            HStack(spacing: 16) {
+                // Screenshot button - long press shows slider
+                Button(action: onScreenshot) {
+                    Image(systemName: "camera.fill").font(.system(size: 20)).foregroundColor(.white)
+                        .frame(width: 50, height: 50).background(Color.black.opacity(0.6)).clipShape(Circle())
+                }
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+                        showFreezeSlider.toggle()
+                    }
+                )
+                
+                Button(action: { recordingManager.isRecording ? recordingManager.stopRecording() : recordingManager.startRecording() }) {
+                    ZStack {
+                        Circle().fill(Color.black.opacity(0.6)).frame(width: 70, height: 70)
+                        if recordingManager.isRecording {
+                            RoundedRectangle(cornerRadius: 4).fill(Color.red).frame(width: 24, height: 24)
+                        } else {
+                            Circle().fill(Color.red).frame(width: 30, height: 30)
+                        }
+                    }
+                }.disabled(!recordingManager.canRecord)
+                if recordingManager.isRecording {
+                    Text(String(format: "%02d:%02d.%d", Int(recordingManager.recordingTime) / 60, Int(recordingManager.recordingTime) % 60, Int((recordingManager.recordingTime.truncatingRemainder(dividingBy: 1)) * 10)))
+                        .font(.system(size: 14, weight: .bold, design: .monospaced)).foregroundColor(.red)
+                        .padding(.horizontal, 8).padding(.vertical, 4).background(Color.black.opacity(0.6)).cornerRadius(6)
+                }
             }
         }
     }

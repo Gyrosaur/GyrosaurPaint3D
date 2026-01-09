@@ -9,75 +9,73 @@ extension Notification.Name {
     static let strokeUndone = Notification.Name("strokeUndone")
 }
 
-// 30 sivellintä - kaikki 3D ja moniväriset
+// 31 sivellintä - kaikki 3D ja moniväriset
 enum BrushType: String, CaseIterable {
     // Perus
     case smooth = "Smooth"
     case ribbon = "Ribbon"
-    case tube = "Tube"
     // Orgaaniset
     case vine = "Vine"
-    case coral = "Coral"
     case tentacle = "Tentacle"
-    case root = "Root"
-    case branch = "Branch"
     // Geometriset
     case helix = "Helix"
-    case dna = "DNA"
     case chain = "Chain"
     case zigzag = "Zigzag"
     case spiral = "Spiral"
-    // Partikkelit (moniväri)
-    case splatter = "Splatter"
+    // Partikkelit
     case confetti = "Confetti"
     case sparkle = "Sparkle"
     case stardust = "Stardust"
     case bubbles = "Bubbles"
     case fireflies = "Fireflies"
     // Tekstuurit
-    case rope = "Rope"
     case braid = "Braid"
-    case knit = "Knit"
     case scales = "Scales"
-    case feather = "Feather"
     // Erikoiset
     case waves = "Waves"
     case pulse = "Pulse"
     case aurora = "Aurora"
     case prism = "Prism"
-    case galaxy = "Galaxy"
+    // Uudet geometriset
+    case crystal = "Crystal"      // Teräviä kristalleja
+    case lightning = "Lightning"  // Salama/sähköpurkaus
+    case shatter = "Shatter"      // Rikkoutuneet sirpaleet
+    case orbit = "Orbit"          // Kiertävät renkaat
+    case blade = "Blade"          // Teräviä teriä
+    case fractal = "Fractal"      // Fraktaalimainen
+    case mesh = "Mesh"            // Verkkorakenne
+    case spike = "Spike"          // Piikkejä
     
     var icon: String {
         switch self {
         case .smooth: return "circle.fill"
         case .ribbon: return "wind"
-        case .tube: return "capsule.fill"
         case .vine: return "leaf.fill"
-        case .coral: return "tree.fill"
         case .tentacle: return "tornado"
-        case .root: return "arrow.down.to.line.alt"
-        case .branch: return "arrow.triangle.branch"
         case .helix: return "hurricane"
-        case .dna: return "figure.stand"
         case .chain: return "link"
         case .zigzag: return "bolt.horizontal.fill"
         case .spiral: return "circle.dotted"
-        case .splatter: return "sparkles"
         case .confetti: return "party.popper.fill"
         case .sparkle: return "sparkle"
         case .stardust: return "star.fill"
         case .bubbles: return "bubble.left.and.bubble.right.fill"
         case .fireflies: return "lightbulb.fill"
-        case .rope: return "line.diagonal"
         case .braid: return "line.3.horizontal"
-        case .knit: return "square.grid.3x3.fill"
         case .scales: return "diamond.fill"
-        case .feather: return "wind.snow"
         case .waves: return "water.waves"
         case .pulse: return "waveform.path"
         case .aurora: return "rainbow"
         case .prism: return "triangle.fill"
-        case .galaxy: return "staroflife.fill"
+        // Uudet
+        case .crystal: return "cube.fill"
+        case .lightning: return "bolt.fill"
+        case .shatter: return "burst.fill"
+        case .orbit: return "circle.circle"
+        case .blade: return "scissors"
+        case .fractal: return "snowflake"
+        case .mesh: return "square.grid.3x3"
+        case .spike: return "star.leadinghalf.filled"
         }
     }
 }
