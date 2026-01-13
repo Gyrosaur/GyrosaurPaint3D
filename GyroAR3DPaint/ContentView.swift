@@ -51,6 +51,8 @@ struct ContentView: View {
     @State private var showColorWheel = false
     @State private var colorWheelHue: CGFloat = 0
     @State private var colorWheelSaturation: CGFloat = 1
+    private let cameraAspectRatio: CGFloat = 9.0 / 16.0
+    private let minToolbarMargin: CGFloat = 120
     
     @Binding var shouldExit: Bool
     
@@ -64,7 +66,7 @@ struct ContentView: View {
             .photosPicker(isPresented: $showPaintImagePicker, selection: $paintPhotoItem, matching: .images)
             .onChange(of: selectedPhotoItem) { _, n in handleImagePick(n) }
             .onChange(of: paintPhotoItem) { _, n in handlePaintImagePick(n) }
-            .onAppear { cameraSettings.backgroundMode = .white; startTremoloTimer(); setupControllerBindings(); setupAirPodsBinding() }
+            .onAppear { startTremoloTimer(); setupControllerBindings(); setupAirPodsBinding() }
     }
     
     func setupControllerBindings() {
@@ -75,24 +77,24 @@ struct ContentView: View {
         controllerManager.$dpadRight.sink { [self] p in if p { handleDpadRight() } }.store(in: &controllerCancellables)
         
         // Left stick - color wheel control when open
-        controllerManager.$leftStickX.sink { [self] _ in 
+        controllerManager.$leftStickX.sink { [self] _ in
             if showColorWheel {
                 handleColorWheelStick()
             } else {
-                handleLeftStick() 
+                handleLeftStick()
             }
         }.store(in: &controllerCancellables)
-        controllerManager.$leftStickY.sink { [self] _ in 
+        controllerManager.$leftStickY.sink { [self] _ in
             if showColorWheel {
                 handleColorWheelStick()
             } else {
-                handleLeftStick() 
+                handleLeftStick()
             }
         }.store(in: &controllerCancellables)
         
-        controllerManager.$rightStickX.sink { [self] v in 
+        controllerManager.$rightStickX.sink { [self] v in
             if !selectionManager.isSelectionMode {
-                drawingEngine.opacity = max(0.1, min(1.0, (v + 1) / 2)) 
+                drawingEngine.opacity = max(0.1, min(1.0, (v + 1) / 2))
             }
         }.store(in: &controllerCancellables)
         controllerManager.$leftBumper.sink { [self] p in if p { drawingEngine.randomizeColor() } }.store(in: &controllerCancellables)
@@ -248,35 +250,44 @@ struct ContentView: View {
     
     var mainZStack: some View {
         ZStack {
+            Color.black.ignoresSafeArea()
+            
+            // Full screen AR view
             arLayer
+                .ignoresSafeArea()
             
-            // Crosshair (tähtäin)
-            if showCrosshair && !selectionManager.isSelectionMode && !hideUI {
-                CrosshairView(color: drawingEngine.currentColor)
-            }
+            cameraOverlayLayer
             
-            // Selection mode indicator
-            if selectionManager.isSelectionMode && !hideUI {
-                SelectionModeOverlay(selectionManager: selectionManager, drawingEngine: drawingEngine)
-            }
-            
-            // Hide UI when recording or hideUI is true
-            if !recordingManager.isRecording && !hideUI {
-                topBarLayer
-                bottomToolsLayer
-                indicatorsOverlay
-                drawingInfoLayer
-                effectLayer
-            }
-            
-            // Left edge opacity slider - always available during drawing
-            if !hideUI {
-                leftEdgeOpacitySlider
-            }
-            
-            // Recording layer - hidden when hideUI
-            if !hideUI {
-                recordingLayer
+            // Toolbars
+            VStack(spacing: 0) {
+                // Top toolbar
+                if !recordingManager.isRecording && !hideUI {
+                    topMarginLayer
+                }
+                
+                Spacer()
+                
+                // Bottom toolbar - show stop button when recording
+                if recordingManager.isRecording {
+                    // Minimal recording controls
+                    HStack {
+                        Spacer()
+                        Button(action: { recordingManager.stopRecording() }) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.red)
+                                    .frame(width: 60, height: 60)
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Color.white)
+                                    .frame(width: 20, height: 20)
+                            }
+                        }
+                        Spacer()
+                    }
+                    .padding(.bottom, 40)
+                } else if !hideUI {
+                    bottomMarginLayer
+                }
             }
             
             if !recordingManager.isRecording && !hideUI {
@@ -304,17 +315,6 @@ struct ContentView: View {
                 )
             }
             
-            // Gallery
-            if showGallery {
-                GalleryView(
-                    galleryManager: galleryManager,
-                    onDismiss: { showGallery = false },
-                    onSelect: { item in
-                        showGallery = false
-                    }
-                )
-            }
-            
             // Color wheel picker overlay
             if showColorWheel {
                 colorWheelOverlay
@@ -324,36 +324,33 @@ struct ContentView: View {
         .statusBarHidden(recordingManager.isRecording || hideUI)
     }
     
+    // Eye button only visible in hide mode - positioned where gallery button normally is
     var eyeToggleButton: some View {
-        VStack {
-            Spacer()
-            HStack {
-                Spacer()
-                VStack(spacing: 12) {
-                    // Crosshair toggle above eye
-                    Button(action: { showCrosshair.toggle() }) {
-                        Image(systemName: showCrosshair ? "plus.circle.fill" : "plus.circle")
-                            .font(.system(size: 16))
-                            .foregroundColor(.white.opacity(0.7))
-                            .padding(10)
-                            .background(Color.black.opacity(0.5))
-                            .clipShape(Circle())
-                    }
-                    
-                    // Eye toggle
-                    Button(action: { hideUI.toggle() }) {
-                        Image(systemName: hideUI ? "eye.slash.fill" : "eye.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(.white.opacity(0.7))
-                            .padding(10)
-                            .background(Color.black.opacity(hideUI ? 0.3 : 0.5))
-                            .clipShape(Circle())
+        Group {
+            if hideUI {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Button(action: { hideUI.toggle() }) {
+                            Image(systemName: "eye.slash.fill")
+                                .font(.system(size: 20))
+                                .foregroundColor(.white.opacity(0.7))
+                                .padding(12)
+                                .background(Color.black.opacity(0.3))
+                                .clipShape(Circle())
+                        }
+                        .padding(.trailing, 16)
+                        .padding(.bottom, 30)
                     }
                 }
-                .padding(.trailing, 16)
-                .padding(.bottom, hideUI ? 30 : 100)
             }
         }
+    }
+
+    private func cameraLayout(in size: CGSize) -> (cameraSize: CGSize, verticalMargin: CGFloat) {
+        // Full screen - no margins
+        return (size, 0)
     }
     
     var drawingLockHandle: some View {
@@ -421,9 +418,9 @@ struct ContentView: View {
                     // Touch area - wider
                     Rectangle()
                         .fill(Color.clear)
-                        .frame(width: 60, height: sliderHeight)
+                        .frame(width: 70, height: sliderHeight)
                         .contentShape(Rectangle())
-                        .position(x: 30, y: topOffset + sliderHeight / 2)
+                        .position(x: 35, y: topOffset + sliderHeight / 2)
                         .gesture(
                             DragGesture(minimumDistance: 0)
                                 .onChanged { value in
@@ -433,37 +430,37 @@ struct ContentView: View {
                                 }
                         )
                     
-                    // Track background - more transparent
-                    RoundedRectangle(cornerRadius: 4)
+                    // Track background - even more transparent
+                    RoundedRectangle(cornerRadius: 5)
                         .fill(
                             LinearGradient(
-                                colors: [Color.white.opacity(0.25), Color.white.opacity(0.05)],
+                                colors: [Color.white.opacity(0.15), Color.white.opacity(0.03)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
                         )
-                        .frame(width: 8, height: sliderHeight)
-                        .position(x: 10, y: topOffset + sliderHeight / 2)
+                        .frame(width: 10, height: sliderHeight)
+                        .position(x: 12, y: topOffset + sliderHeight / 2)
                     
                     // Current value indicator - more subtle
                     Circle()
-                        .fill(Color.white.opacity(0.5))
-                        .frame(width: 16, height: 16)
+                        .fill(Color.white.opacity(0.35))
+                        .frame(width: 18, height: 18)
                         .overlay(
-                            Circle().stroke(Color.white.opacity(0.3), lineWidth: 1)
+                            Circle().stroke(Color.white.opacity(0.2), lineWidth: 1)
                         )
-                        .shadow(color: .black.opacity(0.2), radius: 2)
+                        .shadow(color: .black.opacity(0.15), radius: 2)
                         .position(
-                            x: 10,
+                            x: 12,
                             y: topOffset + sliderHeight * CGFloat(1.0 - drawingEngine.opacity)
                         )
                     
                     // Opacity percentage label - more transparent
                     Text("\(Int(drawingEngine.opacity * 100))")
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(.white.opacity(0.35))
                         .position(
-                            x: 35,
+                            x: 40,
                             y: topOffset + sliderHeight * CGFloat(1.0 - drawingEngine.opacity)
                         )
                 }
@@ -483,172 +480,220 @@ struct ContentView: View {
             drawingMode: $drawingMode,
             arViewRef: $arViewRef
         )
-        .ignoresSafeArea()
     }
     
-    var recordingLayer: some View {
+    var cameraOverlayLayer: some View {
         ZStack {
             // Screenshot freeze overlay
             if screenshotManager.isFreezing {
                 Color.white.opacity(0.3)
-                    .ignoresSafeArea()
                     .allowsHitTesting(false)
             }
             
-            // Left bottom corner - status icons (AirPods, Controller, Performance)
-            VStack {
-                Spacer()
-                HStack {
-                    VStack(spacing: 6) {
-                        // Performance indicator
-                        Button(action: { showPerformanceSettings = true }) {
-                            ZStack {
-                                Circle()
-                                    .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.gray.opacity(0.4), Color.black.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                    .frame(width: 32, height: 32)
-                                Circle()
-                                    .fill(RadialGradient(colors: [Color.white.opacity(0.25), Color.clear], center: .topLeading, startRadius: 0, endRadius: 20))
-                                    .frame(width: 30, height: 30)
-                                Image(systemName: performanceManager.currentLevel.icon)
-                                    .font(.system(size: 14))
-                                    .foregroundColor(performanceManager.currentLevel.color)
-                            }
-                        }
-                        
-                        // Controller icon
-                        if controllerManager.isConnected {
-                            ZStack {
-                                Circle()
-                                    .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.gray.opacity(0.4), Color.black.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                    .frame(width: 32, height: 32)
-                                Circle()
-                                    .fill(RadialGradient(colors: [Color.white.opacity(0.25), Color.clear], center: .topLeading, startRadius: 0, endRadius: 20))
-                                    .frame(width: 30, height: 30)
-                                Image(systemName: "gamecontroller.fill")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.green)
-                            }
-                        }
-                        
-                        // AirPods icon
-                        AirPodsStatusView(manager: airPodsManager)
+            // Crosshair (tähtäin)
+            if showCrosshair && !selectionManager.isSelectionMode && !hideUI {
+                CrosshairView(color: drawingEngine.currentColor)
+            }
+            
+            // Selection mode indicator
+            if selectionManager.isSelectionMode && !hideUI {
+                SelectionModeOverlay(selectionManager: selectionManager, drawingEngine: drawingEngine)
+            }
+            
+            // Hide UI when recording or hideUI is true
+            if !recordingManager.isRecording && !hideUI {
+                indicatorsOverlay
+                drawingInfoLayer
+                effectLayer
+            }
+            
+            // Left edge opacity slider - always available during drawing
+            if !hideUI {
+                leftEdgeOpacitySlider
+            }
+        }
+    }
+    
+    var topMarginLayer: some View {
+        VStack(spacing: 8) {
+            if !recordingManager.isRecording && !hideUI {
+                topBarLayer
+            }
+            
+            if showFreezeSlider && !hideUI {
+                freezeSliderView
+            }
+            
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    var bottomMarginLayer: some View {
+        VStack(spacing: 8) {
+            Spacer(minLength: 0)
+            
+            if !hideUI {
+                recordingStatusIcons
+            }
+            
+            if !recordingManager.isRecording && !hideUI {
+                bottomToolbarContent
+            }
+            
+            if !hideUI {
+                recordingControlsRow
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
+    }
+    
+    var recordingStatusIcons: some View {
+        HStack {
+            VStack(spacing: 6) {
+                // Performance indicator
+                Button(action: { showPerformanceSettings = true }) {
+                    ZStack {
+                        Circle()
+                            .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.gray.opacity(0.4), Color.black.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .frame(width: 32, height: 32)
+                        Circle()
+                            .fill(RadialGradient(colors: [Color.white.opacity(0.25), Color.clear], center: .topLeading, startRadius: 0, endRadius: 20))
+                            .frame(width: 30, height: 30)
+                        Image(systemName: performanceManager.currentLevel.icon)
+                            .font(.system(size: 14))
+                            .foregroundColor(performanceManager.currentLevel.color)
                     }
-                    .padding(.leading, 12)
-                    .padding(.bottom, 100)
-                    
-                    Spacer()
+                }
+                
+                // Controller icon
+                if controllerManager.isConnected {
+                    ZStack {
+                        Circle()
+                            .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.gray.opacity(0.4), Color.black.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .frame(width: 32, height: 32)
+                        Circle()
+                            .fill(RadialGradient(colors: [Color.white.opacity(0.25), Color.clear], center: .topLeading, startRadius: 0, endRadius: 20))
+                            .frame(width: 30, height: 30)
+                        Image(systemName: "gamecontroller.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(.green)
+                    }
+                }
+                
+                // AirPods icon
+                AirPodsStatusView(manager: airPodsManager)
+            }
+            
+            Spacer()
+        }
+        .padding(.leading, 12)
+    }
+    
+    var freezeSliderView: some View {
+        VStack(spacing: 4) {
+            Text("Screenshot Freeze: \(String(format: "%.2f", screenshotFreezeTime))s")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.white)
+            Slider(value: $screenshotFreezeTime, in: 0.01...0.12, step: 0.005)
+                .frame(width: 150)
+                .accentColor(.cyan)
+            Button("Hide") { showFreezeSlider = false }
+                .font(.system(size: 11))
+                .foregroundColor(.gray)
+        }
+        .padding(12)
+        .background(Color.black.opacity(0.8))
+        .cornerRadius(12)
+    }
+    
+    var recordingControlsRow: some View {
+        HStack(spacing: 16) {
+            // Screenshot button - long press shows freeze slider
+            Button(action: { takeScreenshotToGallery() }) {
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(colors: [Color.white.opacity(0.25), Color.gray.opacity(0.4), Color.black.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 50, height: 50)
+                    Circle()
+                        .fill(RadialGradient(colors: [Color.white.opacity(0.3), Color.clear], center: .topLeading, startRadius: 0, endRadius: 30))
+                        .frame(width: 48, height: 48)
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(.white)
+                        .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+                }
+            }
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+                    showFreezeSlider.toggle()
+                }
+            )
+            
+            // Record button
+            Button(action: {
+                if recordingManager.isRecording { recordingManager.stopRecording() }
+                else { recordingManager.startRecording() }
+            }) {
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.gray.opacity(0.35), Color.black.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 70, height: 70)
+                    Circle()
+                        .fill(RadialGradient(colors: [Color.white.opacity(0.2), Color.clear], center: .topLeading, startRadius: 0, endRadius: 40))
+                        .frame(width: 68, height: 68)
+                    if recordingManager.isRecording {
+                        RoundedRectangle(cornerRadius: 4).fill(Color.red).frame(width: 24, height: 24)
+                    } else {
+                        Circle().fill(Color.red).frame(width: 30, height: 30)
+                    }
+                }
+            }
+            .disabled(!recordingManager.canRecord)
+            
+            // Background mode button - with gray border for white mode
+            Button(action: { cycleBackgroundMode() }) {
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.gray.opacity(0.35), Color.black.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 48, height: 48)
+                    Circle()
+                        .fill(backgroundModeColor)
+                        .frame(width: 40, height: 40)
+                    Circle()
+                        .stroke(Color.gray.opacity(0.6), lineWidth: 2)
+                        .frame(width: 40, height: 40)
+                    if cameraSettings.backgroundMode == .ar {
+                        Text("AR").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
+                    }
                 }
             }
             
-            VStack {
-                // Freeze slider at top when shown
-                if showFreezeSlider {
-                    VStack(spacing: 4) {
-                        Text("Screenshot Freeze: \(String(format: "%.2f", screenshotFreezeTime))s")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.white)
-                        Slider(value: $screenshotFreezeTime, in: 0.01...0.12, step: 0.005)
-                            .frame(width: 150)
-                            .accentColor(.cyan)
-                        Button("Hide") { showFreezeSlider = false }
-                            .font(.system(size: 11))
-                            .foregroundColor(.gray)
-                    }
-                    .padding(12)
-                    .background(Color.black.opacity(0.8))
-                    .cornerRadius(12)
-                    .padding(.top, 120)
+            // Eye button (hide UI)
+            Button(action: { hideUI.toggle() }) {
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(colors: [Color.white.opacity(0.25), Color.gray.opacity(0.4), Color.black.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 44, height: 44)
+                    Circle()
+                        .fill(RadialGradient(colors: [Color.white.opacity(0.3), Color.clear], center: .topLeading, startRadius: 0, endRadius: 25))
+                        .frame(width: 42, height: 42)
+                    Image(systemName: "eye.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(.white)
+                        .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
                 }
-                
-                Spacer()
-                
-                HStack(spacing: 16) {
-                    // Screenshot button - long press shows freeze slider
-                    Button(action: { takeScreenshotToGallery() }) {
-                        ZStack {
-                            Circle()
-                                .fill(LinearGradient(colors: [Color.white.opacity(0.25), Color.gray.opacity(0.4), Color.black.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                .frame(width: 50, height: 50)
-                            Circle()
-                                .fill(RadialGradient(colors: [Color.white.opacity(0.3), Color.clear], center: .topLeading, startRadius: 0, endRadius: 30))
-                                .frame(width: 48, height: 48)
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 18))
-                                .foregroundColor(.white)
-                                .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
-                        }
-                    }
-                    .simultaneousGesture(
-                        LongPressGesture(minimumDuration: 0.5).onEnded { _ in
-                            showFreezeSlider.toggle()
-                        }
-                    )
-                    
-                    // Record button
-                    Button(action: {
-                        if recordingManager.isRecording { recordingManager.stopRecording() }
-                        else { recordingManager.startRecording() }
-                    }) {
-                        ZStack {
-                            Circle()
-                                .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.gray.opacity(0.35), Color.black.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                .frame(width: 70, height: 70)
-                            Circle()
-                                .fill(RadialGradient(colors: [Color.white.opacity(0.2), Color.clear], center: .topLeading, startRadius: 0, endRadius: 40))
-                                .frame(width: 68, height: 68)
-                            if recordingManager.isRecording {
-                                RoundedRectangle(cornerRadius: 4).fill(Color.red).frame(width: 24, height: 24)
-                            } else {
-                                Circle().fill(Color.red).frame(width: 30, height: 30)
-                            }
-                        }
-                    }
-                    .disabled(!recordingManager.canRecord)
-                    
-                    // Background mode button - with gray border for white mode
-                    Button(action: { cycleBackgroundMode() }) {
-                        ZStack {
-                            Circle()
-                                .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.gray.opacity(0.35), Color.black.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                .frame(width: 48, height: 48)
-                            Circle()
-                                .fill(backgroundModeColor)
-                                .frame(width: 40, height: 40)
-                            Circle()
-                                .stroke(Color.gray.opacity(0.6), lineWidth: 2)
-                                .frame(width: 40, height: 40)
-                            if cameraSettings.backgroundMode == .ar {
-                                Text("AR").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
-                            }
-                        }
-                    }
-                    
-                    // Gallery button
-                    Button(action: { showGallery = true }) {
-                        ZStack {
-                            Circle()
-                                .fill(LinearGradient(colors: [Color.white.opacity(0.25), Color.gray.opacity(0.4), Color.black.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                .frame(width: 44, height: 44)
-                            Circle()
-                                .fill(RadialGradient(colors: [Color.white.opacity(0.3), Color.clear], center: .topLeading, startRadius: 0, endRadius: 25))
-                                .frame(width: 42, height: 42)
-                            Image(systemName: "photo.stack")
-                                .font(.system(size: 18))
-                                .foregroundColor(.white)
-                                .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
-                        }
-                    }
-                    
-                    // Recording time
-                    if recordingManager.isRecording {
-                        Text(formatTime(recordingManager.recordingTime))
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .foregroundColor(.red)
-                            .padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(Color.black.opacity(0.6)).cornerRadius(6)
-                    }
-                }
-                .padding(.bottom, 30)
+            }
+            
+            // Recording time
+            if recordingManager.isRecording {
+                Text(formatTime(recordingManager.recordingTime))
+                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    .foregroundColor(.red)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(Color.black.opacity(0.6)).cornerRadius(6)
             }
         }
     }
@@ -680,9 +725,9 @@ struct ContentView: View {
         screenshotManager.isFreezing = true
         
         arView.snapshot(saveToHDR: false) { [self] image in
-            guard let image = image else { 
+            guard let image = image else {
                 Task { @MainActor in screenshotManager.isFreezing = false }
-                return 
+                return
             }
             // Save to internal gallery
             _ = galleryManager.saveImage(
@@ -744,26 +789,22 @@ struct ContentView: View {
         }
     }
     
-    var bottomToolsLayer: some View {
-        VStack {
-            Spacer()
-            VStack(spacing: 6) {
-                if toolRowAtBottom {
-                    DraggableToolRow(
-                        content: AnyView(toolRow),
-                        isEditMode: uiEditMode,
-                        isAtBottom: $toolRowAtBottom
-                    )
-                }
-                if colorRowAtBottom {
-                    DraggableToolRow(
-                        content: AnyView(colorRow),
-                        isEditMode: uiEditMode,
-                        isAtBottom: $colorRowAtBottom
-                    )
-                }
+    var bottomToolbarContent: some View {
+        VStack(spacing: 6) {
+            if toolRowAtBottom {
+                DraggableToolRow(
+                    content: AnyView(toolRow),
+                    isEditMode: uiEditMode,
+                    isAtBottom: $toolRowAtBottom
+                )
             }
-            .padding(.bottom, 130) // Above recording controls
+            if colorRowAtBottom {
+                DraggableToolRow(
+                    content: AnyView(colorRow),
+                    isEditMode: uiEditMode,
+                    isAtBottom: $colorRowAtBottom
+                )
+            }
         }
     }
     
@@ -830,10 +871,27 @@ extension ContentView {
         HStack(spacing: 8) {
             Spacer()
             
+            // 1. Drawing mode
             SmallToolBtn(icon: drawingMode.icon, size: 32, hl: drawingMode != .freehand) { showDrawingModes.toggle() }
-            SmallToolBtn(icon: drawingEngine.selectedBrushType.icon, size: 32) { showBrushPicker.toggle() }
+            
+            // 2. Brush picker
+            Button(action: { showBrushPicker.toggle() }) {
+                SmallToolBtnView(icon: drawingEngine.selectedBrushType.icon, size: 32, hl: false)
+            }
+            
+            // 3. Crosshair toggle
+            SmallToolBtn(icon: showCrosshair ? "plus.circle.fill" : "plus.circle", size: 32, hl: showCrosshair) { showCrosshair.toggle() }
+            
+            // 4. Export
             SmallToolBtn(icon: "square.and.arrow.up", size: 32) { showExport = true }
+            
+            // 5. Undo
             SmallToolBtn(icon: "arrow.uturn.backward", size: 32) { drawingEngine.undoLastStroke() }
+            
+            // 6. Redo
+            SmallToolBtn(icon: "arrow.uturn.forward", size: 32) { drawingEngine.redoLastStroke() }
+            
+            // 7. Clear
             SmallToolBtn(icon: "trash", size: 32) { drawingEngine.clearAllStrokes() }
             
             Spacer()
@@ -842,12 +900,14 @@ extension ContentView {
     }
     
     var colorRow: some View {
-        HStack {
-            Spacer()
+        let hasControllerColor = drawingEngine.controllerColor != nil
+        let colorSpacing: CGFloat = hasControllerColor ? 4 : 6
+        
+        return HStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
+                HStack(spacing: colorSpacing) {
                     // Controller color indicator - wheel icon with color center
-                    if drawingEngine.controllerColor != nil {
+                    if hasControllerColor {
                         ZStack {
                             // Rainbow ring
                             Circle()
@@ -857,11 +917,11 @@ extension ContentView {
                                         center: .center
                                     )
                                 )
-                                .frame(width: 28, height: 28)
+                                .frame(width: 26, height: 26)
                             // Selected color center
                             Circle()
                                 .fill(drawingEngine.controllerColor!)
-                                .frame(width: 16, height: 16)
+                                .frame(width: 14, height: 14)
                             // 3D effect
                             Circle()
                                 .fill(
@@ -888,7 +948,7 @@ extension ContentView {
                         colorCircle(index: i)
                     }
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 4)
             }
         }
     }
@@ -1008,7 +1068,7 @@ extension ContentView {
                     .frame(width: 36, height: 36)
             }
         }
-        .onTapGesture { 
+        .onTapGesture {
             drawingEngine.selectedColorIndex = index
             drawingEngine.useImageColors = false
             drawingEngine.clearControllerColor()
@@ -1338,320 +1398,28 @@ extension ContentView {
     
     func resetColorAndOpacity() {
         drawingEngine.opacity = 1.0
+        drawingEngine.hueShift = 0
         drawingEngine.clearControllerColor()
-        // Väri pysyy samana kuin ennen controller-säätöä (selectedColorIndex säilyy)
+        drawingEngine.updateCurrentStrokeColor()
     }
     
-    // Color wheel stick control - slow by default, faster when stick pressed
     func handleColorWheelStick() {
         let x = controllerManager.leftStickX
         let y = controllerManager.leftStickY
         
-        // Calculate magnitude for speed
         let magnitude = sqrt(x * x + y * y)
         guard magnitude > 0.1 else { return }
         
-        // Base speed is very slow, faster when stick fully pressed
         let speed: CGFloat = magnitude > 0.9 ? 0.015 : 0.003
         
-        // Update hue based on X axis
         colorWheelHue += CGFloat(x) * speed
         if colorWheelHue > 1 { colorWheelHue -= 1 }
         if colorWheelHue < 0 { colorWheelHue += 1 }
         
-        // Update saturation based on Y axis (inverted)
         colorWheelSaturation = max(0.1, min(1.0, colorWheelSaturation - CGFloat(y) * speed * 2))
         
-        // Apply color
         let color = Color(hue: colorWheelHue, saturation: colorWheelSaturation, brightness: 1.0)
         drawingEngine.controllerColor = color
-    }
-}
-
-// MARK: - Small Tool Button with metallic gradient
-struct SmallToolBtn: View {
-    let icon: String
-    var size: CGFloat = 32
-    var hl: Bool = false
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            ZStack {
-                // Metallic gradient background - darker for visibility on white
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: hl ? [Color.yellow.opacity(0.95), Color.orange.opacity(0.8), Color.yellow.opacity(0.6)] 
-                                      : [Color(white: 0.55), Color(white: 0.35), Color(white: 0.2)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: size, height: size)
-                
-                // Inner highlight for 3D effect
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [Color.white.opacity(0.4), Color.clear],
-                            center: .topLeading,
-                            startRadius: 0,
-                            endRadius: size * 0.6
-                        )
-                    )
-                    .frame(width: size - 2, height: size - 2)
-                
-                // Subtle inner shadow at bottom
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [Color.clear, Color.black.opacity(0.2)],
-                            center: .center,
-                            startRadius: size * 0.3,
-                            endRadius: size * 0.5
-                        )
-                    )
-                    .frame(width: size, height: size)
-                
-                // Icon
-                Image(systemName: icon)
-                    .font(.system(size: size * 0.5, weight: .medium))
-                    .foregroundColor(hl ? .black : .white)
-                    .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
-            }
-        }
-    }
-}
-
-// MARK: - Compact Brush Picker Real
-struct CompactBrushPickerReal: View {
-    @ObservedObject var drawingEngine: DrawingEngine
-    @ObservedObject var ratingManager: BrushRatingManager
-    let onSelect: () -> Void; let onNotes: (BrushType) -> Void
-    
-    var body: some View {
-        VStack(spacing: 8) {
-            brushGrid
-            Divider().background(Color.white.opacity(0.3))
-            ratingRow
-        }
-        .padding(12).frame(width: 300)
-        .background(Color.black.opacity(0.6))
-        .background(.ultraThinMaterial)
-        .cornerRadius(16)
-    }
-    
-    var brushGrid: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 5), spacing: 8) {
-            ForEach(BrushType.allCases, id: \.self) { b in
-                brushButton(b)
-            }
-        }
-    }
-    
-    func brushButton(_ b: BrushType) -> some View {
-        Button(action: { drawingEngine.selectedBrushType = b; onSelect() }) {
-            VStack(spacing: 3) {
-                Image(systemName: b.icon).font(.system(size: 24))
-                    .foregroundColor(drawingEngine.selectedBrushType == b ? .yellow : .white)
-                Text(b.rawValue).font(.system(size: 8)).foregroundColor(.gray).lineLimit(1)
-                if let s = ratingManager.getAverageStars(for: b) {
-                    Text("\(Int(s.rounded()))★").font(.system(size: 8, weight: .bold)).foregroundColor(.yellow)
-                }
-            }
-            .frame(width: 54, height: 54)
-            .background(drawingEngine.selectedBrushType == b ? Color.yellow.opacity(0.2) : Color.white.opacity(0.05))
-            .cornerRadius(8)
-        }
-    }
-    
-    var ratingRow: some View {
-        HStack {
-            Image(systemName: drawingEngine.selectedBrushType.icon).font(.system(size: 16)).foregroundColor(.yellow)
-            Text(drawingEngine.selectedBrushType.rawValue).font(.system(size: 12, weight: .medium)).foregroundColor(.white)
-            Spacer()
-            ForEach(1...5, id: \.self) { s in
-                starButton(s)
-            }
-            Button(action: { onNotes(drawingEngine.selectedBrushType) }) {
-                Image(systemName: "note.text").font(.system(size: 14)).foregroundColor(.cyan)
-            }
-        }.padding(.horizontal, 4)
-    }
-    
-    func starButton(_ s: Int) -> some View {
-        Button(action: { ratingManager.addRating(brushType: drawingEngine.selectedBrushType, stars: s, notes: "") }) {
-            let avg = ratingManager.getAverageStars(for: drawingEngine.selectedBrushType)
-            let filled = avg.map { s <= Int($0.rounded()) } ?? false
-            Image(systemName: filled ? "star.fill" : "star").font(.system(size: 14)).foregroundColor(filled ? .yellow : .gray)
-        }
-    }
-}
-
-// MARK: - Effect Mode
-enum EffectMode: String {
-    case none = "", rainbow = "🌈", pulse = "💓", scatter = "✨", glow = "💡"
-    var color: Color {
-        switch self { case .none: return .clear; case .rainbow: return .red; case .pulse: return .pink; case .scatter: return .cyan; case .glow: return .yellow }
-    }
-}
-
-// MARK: - Brush Notes View
-struct BrushNotesView: View {
-    let brushType: BrushType
-    @ObservedObject var ratingManager: BrushRatingManager
-    let onDismiss: () -> Void
-    @State private var noteText = ""
-    var body: some View {
-        VStack(spacing: 10) {
-            header
-            textField
-            saveBtn
-        }
-        .padding(12).frame(width: 240).background(Color(white: 0.12)).cornerRadius(12).foregroundColor(.white)
-    }
-    var header: some View {
-        HStack {
-            Image(systemName: brushType.icon).font(.system(size: 18))
-            Text(brushType.rawValue).font(.system(size: 14, weight: .medium))
-            Spacer()
-            Button(action: onDismiss) { Image(systemName: "xmark.circle.fill").foregroundColor(.gray) }
-        }
-    }
-    var textField: some View {
-        TextField("Notes...", text: $noteText, axis: .vertical)
-            .textFieldStyle(.plain).padding(8).background(Color.white.opacity(0.1)).cornerRadius(6)
-    }
-    var saveBtn: some View {
-        Button("Save") {
-            if !noteText.isEmpty { ratingManager.addRating(brushType: brushType, stars: 0, notes: noteText); noteText = "" }
-        }
-        .foregroundColor(.green).disabled(noteText.isEmpty)
-    }
-}
-
-// MARK: - Image Selector View
-struct ImageSelectorView: View {
-    @ObservedObject var imageSelection: ImageSelectionState
-    let onConfirm: () -> Void
-    let onCancel: () -> Void
-    var body: some View {
-        ZStack {
-            Color.black.opacity(0.95).ignoresSafeArea()
-            VStack(spacing: 12) {
-                Text("Select Color Region").font(.system(size: 14, weight: .medium)).foregroundColor(.white)
-                imageView
-                buttons
-            }.padding()
-        }
-    }
-    var imageView: some View {
-        Group {
-            if let img = imageSelection.selectedImage {
-                Image(uiImage: img).resizable().aspectRatio(contentMode: .fit).frame(height: 250)
-            }
-        }
-    }
-    var buttons: some View {
-        HStack(spacing: 30) {
-            Button("Cancel") { onCancel() }.foregroundColor(.red)
-            Button("Use") { onConfirm() }.foregroundColor(.green).fontWeight(.bold)
-        }
-    }
-}
-
-// MARK: - Camera Settings
-enum BackgroundMode: String, CaseIterable {
-    case ar = "AR"
-    case black = "Black"
-    case white = "White"
-    case green = "Green"
-    
-    var color: UIColor? {
-        switch self {
-        case .ar: return nil
-        case .black: return .black
-        case .white: return .white
-        case .green: return UIColor(red: 0, green: 0.8, blue: 0, alpha: 1)
-        }
-    }
-}
-
-enum LensType: String, CaseIterable {
-    case auto = "Auto"
-    case wide = "Wide"
-    case ultraWide = "Ultra"
-    case telephoto = "Tele"
-    
-    var deviceType: AVCaptureDevice.DeviceType {
-        switch self {
-        case .auto, .wide: return .builtInWideAngleCamera
-        case .ultraWide: return .builtInUltraWideCamera
-        case .telephoto: return .builtInTelephotoCamera
-        }
-    }
-}
-
-@MainActor
-class CameraSettings: ObservableObject {
-    @Published var backgroundMode: BackgroundMode = .ar
-    @Published var lensType: LensType = .auto
-    @Published var depthOfField: Float = 0 // 0 = off, 1 = max blur
-    @Published var stabilizationEnabled = true
-    @Published var exposure: Float = 0 // -2 to 2 EV
-    
-    var availableLenses: [LensType] {
-        var lenses: [LensType] = [.auto, .wide]
-        let discovery = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInUltraWideCamera], mediaType: .video, position: .back)
-        if !discovery.devices.isEmpty { lenses.append(.ultraWide) }
-        let teleDiscovery = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInTelephotoCamera], mediaType: .video, position: .back)
-        if !teleDiscovery.devices.isEmpty { lenses.append(.telephoto) }
-        return lenses
-    }
-}
-
-// MARK: - Camera Controls Panel
-struct CameraControlsPanel: View {
-    @ObservedObject var settings: CameraSettings
-    let onDismiss: () -> Void
-    
-    var body: some View {
-        VStack(spacing: 12) {
-            // Header
-            HStack {
-                Text("Camera").font(.system(size: 16, weight: .bold)).foregroundColor(.white)
-                Spacer()
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark.circle.fill").foregroundColor(.gray)
-                }
-            }
-            
-            Divider().background(Color.gray)
-            
-            // Background
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Background").font(.system(size: 11)).foregroundColor(.gray)
-                HStack(spacing: 8) {
-                    ForEach(BackgroundMode.allCases, id: \.self) { mode in
-                        Button(action: { settings.backgroundMode = mode }) {
-                            Text(mode.rawValue).font(.system(size: 12, weight: .medium))
-                                .foregroundColor(settings.backgroundMode == mode ? .black : .white)
-                                .padding(.horizontal, 10).padding(.vertical, 6)
-                                .background(settings.backgroundMode == mode ? Color.white : Color.white.opacity(0.2))
-                                .cornerRadius(6)
-                        }
-                    }
-                }
-            }
-            
-            Text("Tip: Use Green for chroma key editing")
-                .font(.system(size: 9)).foregroundColor(.gray.opacity(0.7))
-        }
-        .padding(16)
-        .background(Color.black.opacity(0.9))
-        .cornerRadius(16)
-        .frame(width: 280)
     }
 }
 
@@ -1738,10 +1506,10 @@ class ScreenshotManager: ObservableObject {
         
         arView.snapshot(saveToHDR: false) { [weak self] image in
             Task { @MainActor in
-                guard let image = image else { 
+                guard let image = image else {
                     self?.errorMessage = "Screenshot failed"
                     self?.isFreezing = false
-                    return 
+                    return
                 }
                 self?.saveToPhotos(image)
                 
@@ -1836,7 +1604,7 @@ struct SaveSuccessToast: View {
 
 
 
-// MARK: - Crosshair View with Depth Indicator
+// MARK: - Crosshair View - simple circle with dot
 struct CrosshairView: View {
     let color: Color
     let depthDistance: Float  // 0.3m default brush distance
@@ -1850,33 +1618,15 @@ struct CrosshairView: View {
         let darkColor = darken(color)
         
         ZStack {
-            // Depth indicator - katkoviiva ylöspäin (näyttää syvyyden)
-            VStack(spacing: 0) {
-                // Katkoviiva syvyyssuuntaan
-                DepthDashLine()
-                    .stroke(darkColor.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                    .frame(width: 1, height: 40)
-                
-                // Syvyysmerkki (pieni vaakaviiva)
-                Rectangle()
-                    .fill(darkColor.opacity(0.4))
-                    .frame(width: 12, height: 1)
-                
-                Spacer().frame(height: 8)
-                
-                // Pääristikko
-                ZStack {
-                    // Ulompi ympyrä
-                    Circle()
-                        .stroke(darkColor.opacity(0.6), lineWidth: 1)
-                        .frame(width: 20, height: 20)
-                    
-                    // Sisempi piste
-                    Circle()
-                        .fill(darkColor.opacity(0.8))
-                        .frame(width: 4, height: 4)
-                }
-            }
+            // Outer circle
+            Circle()
+                .stroke(darkColor.opacity(0.6), lineWidth: 1)
+                .frame(width: 20, height: 20)
+            
+            // Inner dot
+            Circle()
+                .fill(darkColor.opacity(0.8))
+                .frame(width: 4, height: 4)
         }
     }
     
@@ -1884,15 +1634,6 @@ struct CrosshairView: View {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
         return Color(red: r * 0.4, green: g * 0.4, blue: b * 0.4)
-    }
-}
-
-struct DepthDashLine: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.midX, y: 0))
-        path.addLine(to: CGPoint(x: rect.midX, y: rect.height))
-        return path
     }
 }
 
@@ -1948,4 +1689,270 @@ struct SelectionModeOverlay: View {
 extension Notification.Name {
     static let strokesNeedUpdate = Notification.Name("strokesNeedUpdate")
     static let drawingLockReleased = Notification.Name("drawingLockReleased")
+}
+
+// MARK: - Small Tool Button with metallic gradient
+struct SmallToolBtn: View {
+    let icon: String
+    var size: CGFloat = 32
+    var hl: Bool = false
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            SmallToolBtnView(icon: icon, size: size, hl: hl)
+        }
+    }
+}
+
+// View-only version (no button)
+struct SmallToolBtnView: View {
+    let icon: String
+    var size: CGFloat = 32
+    var hl: Bool = false
+    
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: hl ? [Color.yellow.opacity(0.95), Color.orange.opacity(0.8), Color.yellow.opacity(0.6)] 
+                                  : [Color(white: 0.55), Color(white: 0.35), Color(white: 0.2)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: size, height: size)
+            
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [Color.white.opacity(0.4), Color.clear],
+                        center: .topLeading,
+                        startRadius: 0,
+                        endRadius: size * 0.6
+                    )
+                )
+                .frame(width: size - 2, height: size - 2)
+            
+            Image(systemName: icon)
+                .font(.system(size: size * 0.5, weight: .medium))
+                .foregroundColor(hl ? .black : .white)
+                .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+        }
+    }
+}
+
+// MARK: - Effect Mode
+enum EffectMode: String {
+    case none = "None"
+    case rainbow = "Rainbow"
+    case pulse = "Pulse"
+    case scatter = "Scatter"
+    case glow = "Glow"
+    
+    var color: Color {
+        switch self {
+        case .none: return .clear
+        case .rainbow: return .purple
+        case .pulse: return .cyan
+        case .scatter: return .orange
+        case .glow: return .yellow
+        }
+    }
+}
+
+// MARK: - Background Mode
+enum BackgroundMode: String, CaseIterable {
+    case ar = "AR"
+    case black = "Black"
+    case white = "White"
+    case green = "Green"
+    
+    var color: UIColor? {
+        switch self {
+        case .ar: return nil
+        case .black: return .black
+        case .white: return .white
+        case .green: return UIColor(red: 0, green: 1, blue: 0, alpha: 1)
+        }
+    }
+}
+
+// MARK: - Camera Settings
+class CameraSettings: ObservableObject {
+    @Published var backgroundMode: BackgroundMode = .ar
+}
+
+// MARK: - Compact Brush Picker Real
+struct CompactBrushPickerReal: View {
+    @ObservedObject var drawingEngine: DrawingEngine
+    @ObservedObject var ratingManager: BrushRatingManager
+    let onSelect: () -> Void
+    let onNotes: (BrushType) -> Void
+    
+    let columns = [GridItem(.adaptive(minimum: 60))]
+    
+    func getRating(for brush: BrushType) -> Int {
+        Int(ratingManager.getAverageStars(for: brush) ?? 0)
+    }
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            LazyVGrid(columns: columns, spacing: 8) {
+                ForEach(BrushType.allCases, id: \.self) { brush in
+                    BrushButton(
+                        brush: brush,
+                        isSelected: drawingEngine.selectedBrushType == brush,
+                        rating: getRating(for: brush),
+                        onTap: {
+                            drawingEngine.selectedBrushType = brush
+                            onSelect()
+                        },
+                        onLongPress: { onNotes(brush) }
+                    )
+                }
+            }
+            
+            Divider().background(Color.white.opacity(0.3))
+            
+            HStack {
+                Image(systemName: drawingEngine.selectedBrushType.icon)
+                    .font(.system(size: 20))
+                    .foregroundColor(.yellow)
+                Text(drawingEngine.selectedBrushType.rawValue)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white)
+                Spacer()
+                ForEach(1...5, id: \.self) { star in
+                    Image(systemName: star <= getRating(for: drawingEngine.selectedBrushType) ? "star.fill" : "star")
+                        .foregroundColor(.yellow)
+                        .font(.system(size: 16))
+                        .onTapGesture {
+                            ratingManager.addRating(brushType: drawingEngine.selectedBrushType, stars: star, notes: "")
+                        }
+                }
+                Button(action: { onNotes(drawingEngine.selectedBrushType) }) {
+                    Image(systemName: "note.text")
+                        .foregroundColor(.cyan)
+                }
+            }
+        }
+        .padding()
+        .background(Color.black.opacity(0.85))
+        .cornerRadius(16)
+        .padding()
+    }
+}
+
+struct BrushButton: View {
+    let brush: BrushType
+    let isSelected: Bool
+    let rating: Int
+    let onTap: () -> Void
+    let onLongPress: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            VStack(spacing: 4) {
+                Image(systemName: brush.icon)
+                    .font(.system(size: 22))
+                    .foregroundColor(isSelected ? .yellow : .white)
+                Text(brush.rawValue)
+                    .font(.system(size: 8))
+                    .foregroundColor(.white.opacity(0.8))
+                    .lineLimit(1)
+                if rating > 0 {
+                    HStack(spacing: 1) {
+                        Text("\(rating)")
+                            .font(.system(size: 8, weight: .bold))
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 6))
+                    }
+                    .foregroundColor(.yellow)
+                }
+            }
+            .frame(width: 60, height: 60)
+            .background(isSelected ? Color.white.opacity(0.2) : Color.gray.opacity(0.3))
+            .cornerRadius(8)
+        }
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.5).onEnded { _ in onLongPress() }
+        )
+    }
+}
+
+// MARK: - Brush Notes View
+struct BrushNotesView: View {
+    let brushType: BrushType
+    @ObservedObject var ratingManager: BrushRatingManager
+    let onDismiss: () -> Void
+    
+    @State private var noteText: String = ""
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Image(systemName: brushType.icon)
+                    .font(.system(size: 24))
+                    .foregroundColor(.yellow)
+                Text(brushType.rawValue)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.white)
+                Spacer()
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.gray)
+                }
+            }
+            
+            TextEditor(text: $noteText)
+                .frame(height: 120)
+                .cornerRadius(8)
+            
+            Button("Save") {
+                ratingManager.addRating(brushType: brushType, stars: 0, notes: noteText)
+                onDismiss()
+            }
+            .foregroundColor(.cyan)
+        }
+        .padding()
+        .background(Color.black.opacity(0.9))
+        .cornerRadius(16)
+        .padding()
+        .onAppear {
+            let ratings = ratingManager.getRatings(for: brushType)
+            noteText = ratings.first?.notes ?? ""
+        }
+    }
+}
+
+// MARK: - Image Selector View
+struct ImageSelectorView: View {
+    @ObservedObject var imageSelection: ImageSelectionState
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+    
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.8).ignoresSafeArea()
+            
+            VStack {
+                if let image = imageSelection.selectedImage {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxHeight: 300)
+                }
+                
+                HStack(spacing: 20) {
+                    Button("Cancel") { onCancel() }
+                        .foregroundColor(.red)
+                    Button("Use Colors") { onConfirm() }
+                        .foregroundColor(.green)
+                }
+                .padding()
+            }
+        }
+    }
 }

@@ -25,6 +25,7 @@ class StrokeRenderer {
         self.arView = arView
         NotificationCenter.default.addObserver(self, selector: #selector(handleClear), name: .strokesCleared, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(handleUndo(_:)), name: .strokeUndone, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleRedo(_:)), name: .strokeRedone, object: nil)
         
         // Initial performance level sync
         updatePerformanceLevel()
@@ -42,6 +43,13 @@ class StrokeRenderer {
         Task { @MainActor in
             strokeAnchors[id]?.removeFromParent()
             strokeAnchors.removeValue(forKey: id)
+        }
+    }
+    
+    @objc private func handleRedo(_ notification: Notification) {
+        guard let stroke = notification.object as? Stroke else { return }
+        Task { @MainActor in
+            updateStroke(stroke)
         }
     }
     
@@ -127,14 +135,8 @@ class StrokeRenderer {
         case .pulse: return makePulse(stroke)
         case .aurora: return makeAurora(stroke)
         case .prism: return makePrism(stroke)
-        // Uudet brushit
-        case .torus: return makeTorus(stroke)
-        case .morph: return makeMorph(stroke)
-        case .blob: return makeBlob(stroke)
         case .coil: return makeCoil(stroke)
         case .membrane: return makeMembrane(stroke)
-        case .lattice: return makeLattice(stroke)
-        case .tendril: return makeTendril(stroke)
         case .voxel: return makeVoxel(stroke)
         }
     }
@@ -150,34 +152,29 @@ class StrokeRenderer {
         }
         var col = UIColor(baseColor)
         
+        // Get base HSB values
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        col.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        
         // Apply gradient based on airPods value and position in stroke
-        // gradientPosition: 0 = start of stroke, 1 = end of stroke
         let gradientVal = p.gradientValue
         if abs(gradientVal) > 0.05 {
-            var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-            col.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
-            
-            // Calculate brightness adjustment based on gradient direction and position
-            // gradientVal < 0: light at start, dark at end
-            // gradientVal > 0: dark at start, light at end
             let intensity = abs(CGFloat(gradientVal))
-            let brightnessRange: CGFloat = 0.6 * intensity  // Max 60% brightness variation
+            let brightnessRange: CGFloat = 0.6 * intensity
             
             var brightnessAdjust: CGFloat
             if gradientVal < 0 {
-                // Light -> Dark (vasen kallistus)
-                brightnessAdjust = brightnessRange * (1 - CGFloat(gradientPosition) * 2)  // +range at 0, -range at 1
+                brightnessAdjust = brightnessRange * (1 - CGFloat(gradientPosition) * 2)
             } else {
-                // Dark -> Light (oikea kallistus)
-                brightnessAdjust = brightnessRange * (CGFloat(gradientPosition) * 2 - 1)  // -range at 0, +range at 1
+                brightnessAdjust = brightnessRange * (CGFloat(gradientPosition) * 2 - 1)
             }
             
             b = max(0.1, min(1.0, b + brightnessAdjust))
             col = UIColor(hue: h, saturation: s, brightness: b, alpha: a)
         }
         
+        // Apply additional hue shift if provided
         if abs(hueShift) > 0.01 {
-            var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
             col.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
             h = (h + CGFloat(hueShift)).truncatingRemainder(dividingBy: 1.0)
             if h < 0 { h += 1 }
@@ -518,12 +515,10 @@ class StrokeRenderer {
         let parent = ModelEntity()
         for p in stroke.points {
             for _ in 0..<2 {
-                let offset = SIMD3<Float>(Float.random(in: -1...1), Float.random(in: -1...1), Float.random(in: -1...1)) * p.brushSize * 1.5
-                let size = p.brushSize * Float.random(in: 0.2...0.6)
-                let col = pointColor(p, stroke, hueShift: Float.random(in: -0.3...0.3))
-                let star = ModelEntity(mesh: .generateSphere(radius: size), materials: [SimpleMaterial(color: col, isMetallic: true)])
-                star.position = p.position + offset
-                parent.addChild(star)
+                let col = pointColor(p, stroke, hueShift: Float.random(in: -0.2...0.2))
+                let dust = ModelEntity(mesh: .generateSphere(radius: p.brushSize * Float.random(in: 0.2...0.5)), materials: [SimpleMaterial(color: col, isMetallic: false)])
+                dust.position = p.position + SIMD3<Float>(Float.random(in: -1...1), Float.random(in: -1...1), Float.random(in: -1...1)) * p.brushSize
+                parent.addChild(dust)
             }
         }
         return parent
@@ -531,10 +526,9 @@ class StrokeRenderer {
     
     private func makeBubbles(_ stroke: Stroke) -> ModelEntity {
         let parent = ModelEntity()
-        for (i, p) in stroke.points.enumerated() where i % 3 == 0 {
-            let col = pointColor(p, stroke, hueShift: randomHueShift())
-            var mat = SimpleMaterial(); mat.color = .init(tint: col.withAlphaComponent(0.4)); mat.metallic = .float(0.8)
-            let bubble = ModelEntity(mesh: .generateSphere(radius: p.brushSize * Float.random(in: 1...2)), materials: [mat])
+        for (i, p) in stroke.points.enumerated() {
+            let col = pointColor(p, stroke, hueShift: Float.random(in: -0.1...0.1))
+            let bubble = ModelEntity(mesh: .generateSphere(radius: p.brushSize * Float.random(in: 0.6...1.2)), materials: [SimpleMaterial(color: col.withAlphaComponent(0.4), isMetallic: true)])
             bubble.position = p.position + SIMD3<Float>(Float.random(in: -1...1), Float.random(in: -1...1), Float.random(in: -1...1)) * p.brushSize
             parent.addChild(bubble)
         }
@@ -543,30 +537,11 @@ class StrokeRenderer {
     
     private func makeFireflies(_ stroke: Stroke) -> ModelEntity {
         let parent = ModelEntity()
-        for (i, p) in stroke.points.enumerated() where i % 4 == 0 {
+        for (i, p) in stroke.points.enumerated() where i % 2 == 0 {
             let col = pointColor(p, stroke, hueShift: Float.random(in: -0.1...0.1))
-            var mat = SimpleMaterial(); mat.color = .init(tint: col); mat.metallic = .float(1.0)
-            let glow = ModelEntity(mesh: .generateSphere(radius: p.brushSize * 0.5), materials: [mat])
+            let glow = ModelEntity(mesh: .generateSphere(radius: p.brushSize * 0.4), materials: [SimpleMaterial(color: col, isMetallic: true)])
             glow.position = p.position + SIMD3<Float>(Float.random(in: -1...1), Float.random(in: -1...1), Float.random(in: -1...1)) * p.brushSize * 2
             parent.addChild(glow)
-        }
-        return parent
-    }
-    
-    private func makeRope(_ stroke: Stroke) -> ModelEntity {
-        let parent = ModelEntity()
-        let pts = stroke.points
-        // Multiple twisted strands
-        for strand in 0..<3 {
-            for i in 0..<pts.count {
-                let p = pts[i], dir = direction(at: i, pts: pts), basis = makeBasis(dir)
-                let angle = Float(i) * 0.5 + Float(strand) * .pi * 2 / 3
-                let offset = (basis.0 * cos(angle) + basis.1 * sin(angle)) * p.brushSize * 0.7
-                let col = pointColor(p, stroke, hueShift: Float(strand) * 0.05)
-                let seg = ModelEntity(mesh: .generateSphere(radius: p.brushSize * 0.4), materials: [SimpleMaterial(color: col, isMetallic: false)])
-                seg.position = p.position + offset
-                parent.addChild(seg)
-            }
         }
         return parent
     }
@@ -574,37 +549,13 @@ class StrokeRenderer {
     private func makeBraid(_ stroke: Stroke) -> ModelEntity {
         let parent = ModelEntity()
         let pts = stroke.points
-        for strand in 0..<3 {
-            for i in 0..<pts.count {
-                let p = pts[i], dir = direction(at: i, pts: pts), basis = makeBasis(dir)
-                let phase = Float(strand) * .pi * 2 / 3
-                let xOff = cos(Float(i) * 0.3 + phase) * p.brushSize
-                let yOff = sin(Float(i) * 0.6 + phase) * p.brushSize * 0.5
-                let offset = basis.0 * xOff + basis.1 * yOff
-                let col = pointColor(p, stroke, hueShift: Float(strand) * 0.1 - 0.1)
-                let seg = ModelEntity(mesh: .generateSphere(radius: p.brushSize * 0.5), materials: [SimpleMaterial(color: col, isMetallic: false)])
-                seg.position = p.position + offset
-                parent.addChild(seg)
-            }
-        }
-        return parent
-    }
-    
-    private func makeKnit(_ stroke: Stroke) -> ModelEntity {
-        let parent = ModelEntity()
-        let pts = stroke.points
         for i in 0..<pts.count {
             let p = pts[i], dir = direction(at: i, pts: pts), basis = makeBasis(dir)
-            let col = pointColor(p, stroke, hueShift: Float(i % 2) * 0.1)
-            // Loop pattern
-            let loopAngle = Float(i) * 0.8
-            for j in 0..<6 {
-                let a = Float(j) / 6 * .pi * 2 + loopAngle
-                let offset = (basis.0 * cos(a) + basis.1 * sin(a)) * p.brushSize
-                let knot = ModelEntity(mesh: .generateSphere(radius: p.brushSize * 0.25), materials: [SimpleMaterial(color: col, isMetallic: false)])
-                knot.position = p.position + offset
-                parent.addChild(knot)
-            }
+            let braidOffset = (basis.0 * cos(Float(i) * 0.5) + basis.1 * sin(Float(i) * 0.5)) * p.brushSize
+            let col = pointColor(p, stroke, hueShift: Float(i % 6) * 0.05)
+            let braid = ModelEntity(mesh: .generateSphere(radius: p.brushSize * 0.6), materials: [SimpleMaterial(color: col, isMetallic: false)])
+            braid.position = p.position + braidOffset
+            parent.addChild(braid)
         }
         return parent
     }
@@ -612,45 +563,27 @@ class StrokeRenderer {
     private func makeScales(_ stroke: Stroke) -> ModelEntity {
         let parent = ModelEntity()
         let pts = stroke.points
-        for (i, p) in pts.enumerated() {
-            let dir = direction(at: i, pts: pts)
-            let col = pointColor(p, stroke, hueShift: Float(i % 3) * 0.05)
-            let scale = ModelEntity(mesh: .generateBox(size: SIMD3<Float>(p.brushSize * 2, p.brushSize * 0.3, p.brushSize * 1.5), cornerRadius: p.brushSize * 0.2), materials: [SimpleMaterial(color: col, isMetallic: true)])
-            scale.position = p.position
-            scale.orientation = simd_quatf(from: SIMD3<Float>(0, 0, 1), to: dir) * simd_quatf(angle: Float(i % 2) * 0.3 - 0.15, axis: SIMD3<Float>(1, 0, 0))
+        for i in 0..<pts.count {
+            let p = pts[i], dir = direction(at: i, pts: pts), basis = makeBasis(dir)
+            let scale = ModelEntity(mesh: .generateBox(size: SIMD3<Float>(p.brushSize * 1.5, p.brushSize * 0.1, p.brushSize), cornerRadius: p.brushSize * 0.2), materials: [SimpleMaterial(color: pointColor(p, stroke), isMetallic: false)])
+            scale.position = p.position + basis.0 * p.brushSize
+            scale.orientation = simd_quatf(from: SIMD3<Float>(0, 1, 0), to: dir)
             parent.addChild(scale)
-        }
-        return parent
-    }
-    
-    private func makeFeather(_ stroke: Stroke) -> ModelEntity {
-        let parent = ModelEntity()
-        parent.addChild(makeTube(stroke, seg: 4))
-        let pts = stroke.points
-        for i in stride(from: 2, to: pts.count, by: 3) {
-            let p = pts[i], dir = direction(at: i, pts: pts)
-            let side = simd_normalize(simd_cross(dir, SIMD3<Float>(0, 1, 0)))
-            for s in [-1, 1] as [Float] {
-                let col = pointColor(p, stroke, hueShift: Float.random(in: -0.05...0.05))
-                let barb = ModelEntity(mesh: .generateBox(size: SIMD3<Float>(p.brushSize * 3, p.brushSize * 0.1, p.brushSize * 0.3)), materials: [SimpleMaterial(color: col, isMetallic: false)])
-                barb.position = p.position + side * p.brushSize * 1.5 * s
-                barb.orientation = simd_quatf(angle: s * 0.3, axis: dir)
-                parent.addChild(barb)
-            }
         }
         return parent
     }
     
     private func makeWaves(_ stroke: Stroke) -> ModelEntity {
         var verts: [SIMD3<Float>] = [], inds: [UInt32] = []
-        let pts = stroke.points, seg = 8
+        let pts = stroke.points
+        let seg = 6
         for i in 0..<pts.count {
             let p = pts[i], dir = direction(at: i, pts: pts), basis = makeBasis(dir)
-            let wave = sin(Float(i) * 0.5) * p.brushSize
+            let waveAmp = sin(Float(i) * 0.5) * p.brushSize
             for j in 0..<seg {
                 let angle = Float(j) / Float(seg) * .pi * 2
                 let norm = basis.0 * cos(angle) + basis.1 * sin(angle)
-                verts.append(p.position + basis.1 * wave + norm * p.brushSize * 0.6)
+                verts.append(p.position + norm * p.brushSize + basis.1 * waveAmp)
             }
             if i > 0 { for j in 0..<seg { let n = (j + 1) % seg; let b = UInt32((i - 1) * seg); let t = UInt32(i * seg)
                 inds += [b + UInt32(j), t + UInt32(j), b + UInt32(n), b + UInt32(n), t + UInt32(j), t + UInt32(n)] } }
@@ -662,9 +595,9 @@ class StrokeRenderer {
         let parent = ModelEntity()
         let pts = stroke.points
         for (i, p) in pts.enumerated() {
-            let pulseSize = p.brushSize * (1 + sin(Float(i) * 0.5) * 0.5)
-            let col = pointColor(p, stroke, hueShift: sin(Float(i) * 0.3) * 0.1)
-            let sphere = ModelEntity(mesh: .generateSphere(radius: pulseSize), materials: [SimpleMaterial(color: col, isMetallic: false)])
+            let pulseSize = p.brushSize * (1 + sin(Float(i) * 0.4) * 0.5)
+            let col = pointColor(p, stroke, hueShift: Float(i % 5) * 0.07)
+            let sphere = ModelEntity(mesh: .generateSphere(radius: pulseSize), materials: [SimpleMaterial(color: col, isMetallic: true)])
             sphere.position = p.position
             parent.addChild(sphere)
         }
@@ -674,18 +607,11 @@ class StrokeRenderer {
     private func makeAurora(_ stroke: Stroke) -> ModelEntity {
         let parent = ModelEntity()
         let pts = stroke.points
-        for layer in 0..<3 {
-            for (i, p) in pts.enumerated() {
-                let dir = direction(at: i, pts: pts), basis = makeBasis(dir)
-                let yOff = Float(layer) * p.brushSize * 0.8
-                let wave = sin(Float(i) * 0.3 + Float(layer)) * p.brushSize
-                let hue = Float(layer) * 0.15 + Float(i) * 0.01
-                let col = pointColor(p, stroke, hueShift: hue)
-                var mat = SimpleMaterial(); mat.color = .init(tint: col.withAlphaComponent(0.5))
-                let ribbon = ModelEntity(mesh: .generateBox(size: SIMD3<Float>(p.brushSize * 2, p.brushSize * 0.1, p.brushSize * 0.5)), materials: [mat])
-                ribbon.position = p.position + basis.1 * (yOff + wave)
-                parent.addChild(ribbon)
-            }
+        for (i, p) in pts.enumerated() {
+            let col = pointColor(p, stroke, hueShift: Float(i % 10) * 0.05)
+            let glow = ModelEntity(mesh: .generateSphere(radius: p.brushSize * 2), materials: [SimpleMaterial(color: col.withAlphaComponent(0.2), isMetallic: false)])
+            glow.position = p.position
+            parent.addChild(glow)
         }
         return parent
     }
@@ -694,10 +620,10 @@ class StrokeRenderer {
         let parent = ModelEntity()
         let pts = stroke.points
         for (i, p) in pts.enumerated() where i % 2 == 0 {
-            let dir = direction(at: i, pts: pts)
-            let col = pointColor(p, stroke, hueShift: Float(i % 6) * 0.1)
+            let col = pointColor(p, stroke, hueShift: Float(i % 8) * 0.05)
             let prism = ModelEntity(mesh: .generateBox(size: SIMD3<Float>(p.brushSize, p.brushSize * 2, p.brushSize), cornerRadius: 0), materials: [SimpleMaterial(color: col, isMetallic: true)])
             prism.position = p.position
+            let dir = direction(at: i, pts: pts)
             prism.orientation = simd_quatf(from: SIMD3<Float>(0, 1, 0), to: dir) * simd_quatf(angle: Float(i) * 0.2, axis: dir)
             parent.addChild(prism)
         }
@@ -909,23 +835,41 @@ class StrokeRenderer {
         return parent
     }
     
-    // Voxel - pixelated 3D cubes
+    // Voxel - pixelated 3D cubes that respond to brush size
     private func makeVoxel(_ stroke: Stroke) -> ModelEntity {
         let parent = ModelEntity()
         let pts = stroke.points
-        let voxelSize = (pts.first?.brushSize ?? 0.01) * 0.8
         var placedVoxels = Set<String>()
-        for p in pts {
+        
+        // Use base grid size from first point, but voxel size varies
+        let baseGridSize: Float = 0.015
+        
+        for (i, p) in pts.enumerated() {
             let col = pointColor(p, stroke, hueShift: Float.random(in: -0.05...0.05))
-            // Snap to grid
-            let gridX = round(p.position.x / voxelSize) * voxelSize
-            let gridY = round(p.position.y / voxelSize) * voxelSize
-            let gridZ = round(p.position.z / voxelSize) * voxelSize
+            // Voxel cube size based on brush size
+            let voxelSize = p.brushSize * 1.2
+            
+            // Snap to fixed grid for consistent placement
+            let gridX = round(p.position.x / baseGridSize) * baseGridSize
+            let gridY = round(p.position.y / baseGridSize) * baseGridSize
+            let gridZ = round(p.position.z / baseGridSize) * baseGridSize
             let key = "\(Int(gridX*1000))_\(Int(gridY*1000))_\(Int(gridZ*1000))"
+            
             if !placedVoxels.contains(key) {
                 placedVoxels.insert(key)
-                let voxel = ModelEntity(mesh: .generateBox(size: SIMD3<Float>(voxelSize * 0.95, voxelSize * 0.95, voxelSize * 0.95), cornerRadius: 0), materials: [SimpleMaterial(color: col, isMetallic: false)])
-                voxel.position = SIMD3<Float>(gridX, gridY, gridZ)
+                // Slightly smaller than grid to prevent z-fighting
+                let actualSize = voxelSize * 0.92
+                let voxel = ModelEntity(
+                    mesh: .generateBox(size: SIMD3<Float>(actualSize, actualSize, actualSize), cornerRadius: 0),
+                    materials: [SimpleMaterial(color: col, isMetallic: false)]
+                )
+                // Small random offset to prevent z-fighting between adjacent voxels
+                let jitter: Float = 0.0005
+                voxel.position = SIMD3<Float>(
+                    gridX + Float.random(in: -jitter...jitter),
+                    gridY + Float.random(in: -jitter...jitter),
+                    gridZ + Float.random(in: -jitter...jitter)
+                )
                 parent.addChild(voxel)
             }
         }
@@ -933,7 +877,7 @@ class StrokeRenderer {
     }
     
     // MARK: - Helpers
-    private func direction(at i: Int, pts: [StrokePoint]) -> SIMD3<Float> {    private func direction(at i: Int, pts: [StrokePoint]) -> SIMD3<Float> {
+    private func direction(at i: Int, pts: [StrokePoint]) -> SIMD3<Float> {
         if pts.count < 2 { return SIMD3<Float>(0, 0, 1) }
         if i == 0 { return simd_normalize(pts[1].position - pts[0].position) }
         if i >= pts.count - 1 { return simd_normalize(pts[pts.count - 1].position - pts[pts.count - 2].position) }

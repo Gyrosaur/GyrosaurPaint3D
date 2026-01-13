@@ -7,9 +7,10 @@ import Darwin
 extension Notification.Name {
     static let strokesCleared = Notification.Name("strokesCleared")
     static let strokeUndone = Notification.Name("strokeUndone")
+    static let strokeRedone = Notification.Name("strokeRedone")
 }
 
-// 31 sivellintä - kaikki 3D ja moniväriset
+// Sivellintyypit
 enum BrushType: String, CaseIterable {
     // Perus
     case smooth = "Smooth"
@@ -36,15 +37,10 @@ enum BrushType: String, CaseIterable {
     case pulse = "Pulse"
     case aurora = "Aurora"
     case prism = "Prism"
-    // Uudet epäsäännölliset muodot
-    case torus = "Torus"          // Rinkeli/donitsi-muoto
-    case morph = "Morph"          // Muuttuva monikulmio (3-8 kulmaa)
-    case blob = "Blob"            // Orgaaninen möykky (metaball)
-    case coil = "Coil"            // Kierteinen jousi
-    case membrane = "Membrane"    // Ohut kalvo/kupla
-    case lattice = "Lattice"      // 3D ristikkorakenne
-    case tendril = "Tendril"      // Haarautuva lonkero
-    case voxel = "Voxel"          // Pikselimäinen 3D-kuutio
+    // Uudet
+    case coil = "Coil"
+    case membrane = "Membrane"
+    case voxel = "Voxel"
     
     var icon: String {
         switch self {
@@ -67,14 +63,8 @@ enum BrushType: String, CaseIterable {
         case .pulse: return "waveform.path"
         case .aurora: return "rainbow"
         case .prism: return "triangle.fill"
-        // Uudet epäsäännölliset
-        case .torus: return "circle.dashed"
-        case .morph: return "seal.fill"
-        case .blob: return "drop.fill"
         case .coil: return "hurricane"
         case .membrane: return "oval.fill"
-        case .lattice: return "cube.transparent"
-        case .tendril: return "arrow.triangle.branch"
         case .voxel: return "square.3.layers.3d"
         }
     }
@@ -116,6 +106,9 @@ class DrawingEngine: ObservableObject {
     @Published var imageColors: [Color] = []
     @Published var imageSelection = ImageSelectionState()
     @Published var tremoloActive: Bool = true // For tremolo modulation
+    
+    // Redo stack
+    private var undoneStrokes: [Stroke] = []
     @Published var controllerColor: Color? = nil // Color from controller wheel
     @Published var brushSizeMultiplier: Float = 1.0 // LT: size boost
     @Published var sparkleAmount: Float = 0 // RT: sparkle/scatter
@@ -180,13 +173,12 @@ class DrawingEngine: ObservableObject {
     func addPoint(_ position: SIMD3<Float>) {
         guard isDrawing, tremoloActive else { return } // Tremolo can skip points
         // Skip points that are too close to reduce CPU/GPU load when recording
-                if let last = currentStroke?.points.last {
-                    let minSpacing: Float = 0.002 // 2 mm
-                    if simd_distance(last.position, position) < minSpacing {
-                        return
-                    }
-                }
-                
+        if let last = currentStroke?.points.last {
+            let minSpacing: Float = 0.002 // 2 mm
+            if simd_distance(last.position, position) < minSpacing {
+                return
+            }
+        }
         
         // Apply sparkle scatter if RT pressed
         var finalPos = position
@@ -196,6 +188,9 @@ class DrawingEngine: ObservableObject {
             finalPos.y += Float.random(in: -scatter...scatter)
             finalPos.z += Float.random(in: -scatter...scatter)
         }
+        
+        // Haptic feedback based on brush size
+        triggerHaptic(for: brushSize * brushSizeMultiplier)
         
         // Lock current color to this point - always set it
         let pointColor = currentColor
@@ -212,6 +207,26 @@ class DrawingEngine: ObservableObject {
         if useImageColors && !imageColors.isEmpty { imageColorIndex += 1 }
     }
     
+    private var lastHapticTime: TimeInterval = 0
+    
+    private func triggerHaptic(for size: Float) {
+        let now = Date().timeIntervalSince1970
+        // Limit haptic rate to avoid overwhelming
+        guard now - lastHapticTime > 0.05 else { return }
+        lastHapticTime = now
+        
+        // Size ranges: small < 0.015, medium 0.015-0.03, large > 0.03
+        let generator: UIImpactFeedbackGenerator
+        if size < 0.015 {
+            generator = UIImpactFeedbackGenerator(style: .light)
+        } else if size < 0.03 {
+            generator = UIImpactFeedbackGenerator(style: .medium)
+        } else {
+            generator = UIImpactFeedbackGenerator(style: .heavy)
+        }
+        generator.impactOccurred(intensity: min(1.0, CGFloat(size * 30)))
+    }
+    
     func stopDrawing() -> Stroke? {
         guard isDrawing, let stroke = currentStroke, stroke.points.count > 1 else {
             isDrawing = false; currentStroke = nil; return nil
@@ -225,11 +240,20 @@ class DrawingEngine: ObservableObject {
     func undoLastStroke() {
         guard !strokes.isEmpty else { return }
         let removed = strokes.removeLast()
+        undoneStrokes.append(removed)
         NotificationCenter.default.post(name: .strokeUndone, object: removed.id)
+    }
+    
+    func redoLastStroke() {
+        guard !undoneStrokes.isEmpty else { return }
+        let restored = undoneStrokes.removeLast()
+        strokes.append(restored)
+        NotificationCenter.default.post(name: .strokeRedone, object: restored)
     }
     
     func clearAllStrokes() {
         strokes.removeAll()
+        undoneStrokes.removeAll()
         NotificationCenter.default.post(name: .strokesCleared, object: nil)
     }
     

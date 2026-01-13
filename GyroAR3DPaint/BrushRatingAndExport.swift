@@ -301,15 +301,10 @@ class ExportManager {
         case .pulse: return makePulseExport(stroke, quality: quality)
         case .aurora: return makeAuroraExport(stroke, quality: quality)
         case .prism: return makePrismExport(stroke, quality: quality)
-        // Uudet - käytä tube exportia toistaiseksi
-        case .crystal: return makeTubeExport(stroke, segments: segments, quality: quality)
-        case .lightning: return makeTubeExport(stroke, segments: segments, quality: quality)
-        case .shatter: return makeTubeExport(stroke, segments: segments, quality: quality)
-        case .orbit: return makeTubeExport(stroke, segments: segments, quality: quality)
-        case .blade: return makeTubeExport(stroke, segments: segments, quality: quality)
-        case .fractal: return makeTubeExport(stroke, segments: segments, quality: quality)
-        case .mesh: return makeTubeExport(stroke, segments: segments, quality: quality)
-        case .spike: return makeTubeExport(stroke, segments: segments, quality: quality)
+        // Uudet
+        case .coil: return makeTubeExport(stroke, segments: segments, quality: quality)
+        case .membrane: return makeTubeExport(stroke, segments: segments, quality: quality)
+        case .voxel: return makeTubeExport(stroke, segments: segments, quality: quality)
         }
     }
     
