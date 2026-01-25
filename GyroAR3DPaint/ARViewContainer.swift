@@ -117,6 +117,9 @@ struct ARViewContainer: UIViewRepresentable {
             
             let brushPosition = getBrushPosition(from: frame)
             
+            // Handle controller drawing (LT/RT triggers)
+            handleControllerDrawing(at: brushPosition)
+            
             // Handle different drawing modes
             switch drawingMode {
             case .freehand:
@@ -134,6 +137,41 @@ struct ARViewContainer: UIViewRepresentable {
                     updateLinePreview()
                 }
             }
+        }
+        
+        // Track controller drawing state for edge detection
+        private var wasControllerDrawing = false
+        
+        private func handleControllerDrawing(at position: SIMD3<Float>) {
+            guard let controllerManager = controllerManager,
+                  let drawingEngine = drawingEngine,
+                  controllerManager.isConnected else { return }
+            
+            let isDrawingNow = controllerManager.isControllerDrawing
+            
+            // Rising edge: started drawing
+            if isDrawingNow && !wasControllerDrawing {
+                // Don't interfere with selection mode
+                if selectionManager?.isSelectionMode != true {
+                    switch drawingMode {
+                    case .freehand:
+                        drawingEngine.startDrawing()
+                    case .straightLine, .arc, .crescendo, .diminuendo:
+                        straightLineState?.startPoint = position
+                        straightLineState?.endPoint = position
+                        straightLineState?.isDrawing = true
+                    }
+                }
+            }
+            
+            // Falling edge: stopped drawing
+            if !isDrawingNow && wasControllerDrawing {
+                if selectionManager?.isSelectionMode != true {
+                    handleTouchEnded()
+                }
+            }
+            
+            wasControllerDrawing = isDrawingNow
         }
         
         private func updateLinePreview() {

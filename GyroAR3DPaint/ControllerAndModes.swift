@@ -34,6 +34,17 @@ class GameControllerManager: ObservableObject {
     @Published var leftBumper = false
     @Published var rightBumper = false
     @Published var menuButton = false  // Xbox menu button
+    @Published var leftStickButton = false  // L3 - stick pressed
+    @Published var rightStickButton = false  // R3 - stick pressed
+    
+    // Drawing control
+    @Published var isControllerDrawing = false  // LT or RT pressed = draw
+    
+    // Brush size settings
+    let baseBrushMin: Float = 0.002
+    let baseBrushMax: Float = 0.052
+    let extendedBrushMin: Float = 0.0002  // 0.1x base min
+    let extendedBrushMax: Float = 0.104   // 2x base max
     
     // Computed values for drawing
     var hueShift: Float {
@@ -54,6 +65,22 @@ class GameControllerManager: ObservableObject {
     var brushSizeModifier: Float {
         // Right stick X = size modifier
         return 1 + rightStickX * 0.5 // 0.5 to 1.5
+    }
+    
+    // Left stick Y controls brush size:
+    // - Bottom (-1) = min size, Top (+1) = max size
+    // - When L3 pressed (leftStickButton), range extends
+    var controllerBrushSize: Float {
+        // Normalize stick Y from -1...1 to 0...1
+        let normalized = (leftStickY + 1) / 2  // 0 at bottom, 1 at top
+        
+        if leftStickButton {
+            // Extended range: 0.1x min to 2x max
+            return extendedBrushMin + normalized * (extendedBrushMax - extendedBrushMin)
+        } else {
+            // Normal range
+            return baseBrushMin + normalized * (baseBrushMax - baseBrushMin)
+        }
     }
     
     private var controller: GCController?
@@ -129,16 +156,34 @@ class GameControllerManager: ObservableObject {
             }
         }
         
-        // Triggers
+        // Triggers - now control drawing on/off
         gamepad.leftTrigger.valueChangedHandler = { [weak self] _, value, _ in
             Task { @MainActor in
                 self?.leftTrigger = value
+                // LT or RT > 0.1 = drawing active
+                self?.isControllerDrawing = value > 0.1 || (self?.rightTrigger ?? 0) > 0.1
             }
         }
         
         gamepad.rightTrigger.valueChangedHandler = { [weak self] _, value, _ in
             Task { @MainActor in
                 self?.rightTrigger = value
+                // LT or RT > 0.1 = drawing active
+                self?.isControllerDrawing = (self?.leftTrigger ?? 0) > 0.1 || value > 0.1
+            }
+        }
+        
+        // Left stick button (L3) - extend brush size range
+        gamepad.leftThumbstickButton?.valueChangedHandler = { [weak self] _, _, pressed in
+            Task { @MainActor in
+                self?.leftStickButton = pressed
+            }
+        }
+        
+        // Right stick button (R3)
+        gamepad.rightThumbstickButton?.valueChangedHandler = { [weak self] _, _, pressed in
+            Task { @MainActor in
+                self?.rightStickButton = pressed
             }
         }
         

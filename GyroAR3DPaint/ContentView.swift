@@ -76,31 +76,45 @@ struct ContentView: View {
         controllerManager.$dpadLeft.sink { [self] p in if p { handleDpadLeft() } }.store(in: &controllerCancellables)
         controllerManager.$dpadRight.sink { [self] p in if p { handleDpadRight() } }.store(in: &controllerCancellables)
         
-        // Left stick - color wheel control when open
+        // Left stick - color wheel control when open, otherwise brush size
         controllerManager.$leftStickX.sink { [self] _ in
             if showColorWheel {
                 handleColorWheelStick()
-            } else {
+            } else if selectionManager.isSelectionMode {
                 handleLeftStick()
             }
+            // X axis doesn't affect brush size
         }.store(in: &controllerCancellables)
         controllerManager.$leftStickY.sink { [self] _ in
             if showColorWheel {
                 handleColorWheelStick()
-            } else {
+            } else if selectionManager.isSelectionMode {
                 handleLeftStick()
+            } else {
+                // Normal mode: left stick Y controls brush size
+                drawingEngine.brushSize = controllerManager.controllerBrushSize
             }
         }.store(in: &controllerCancellables)
         
+        // L3 button triggers brush size update (for extended range)
+        controllerManager.$leftStickButton.sink { [self] _ in
+            if !showColorWheel && !selectionManager.isSelectionMode {
+                drawingEngine.brushSize = controllerManager.controllerBrushSize
+            }
+        }.store(in: &controllerCancellables)
+        
+        // Right stick X controls opacity
         controllerManager.$rightStickX.sink { [self] v in
             if !selectionManager.isSelectionMode {
                 drawingEngine.opacity = max(0.1, min(1.0, (v + 1) / 2))
             }
         }.store(in: &controllerCancellables)
+        
+        // LT and RT control drawing on/off (isControllerDrawing is updated in GameControllerManager)
+        // The actual drawing logic is handled in ARViewContainer based on isControllerDrawing
+        
         controllerManager.$leftBumper.sink { [self] p in if p { drawingEngine.randomizeColor() } }.store(in: &controllerCancellables)
         controllerManager.$rightBumper.sink { [self] p in if p { drawingEngine.invertColor() } }.store(in: &controllerCancellables)
-        controllerManager.$leftTrigger.sink { [self] v in drawingEngine.brushSizeMultiplier = 1.0 + v * 2.0 }.store(in: &controllerCancellables)
-        controllerManager.$rightTrigger.sink { [self] v in drawingEngine.sparkleAmount = v }.store(in: &controllerCancellables)
         controllerManager.$buttonB.sink { [self] p in if p { drawingEngine.clearAllStrokes() } }.store(in: &controllerCancellables)
         controllerManager.$buttonX.sink { [self] p in if p { drawingEngine.undoLastStroke() } }.store(in: &controllerCancellables)
         controllerManager.$buttonA.sink { [self] p in if p { resetColorAndOpacity() } }.store(in: &controllerCancellables)
@@ -150,9 +164,9 @@ struct ContentView: View {
     func handleLeftStick() {
         if selectionManager.isSelectionMode {
             moveSelectedStrokes()
-        } else {
-            updateColorWheel()
         }
+        // Note: brush size control is now handled directly in setupControllerBindings
+        // Color wheel is handled separately when showColorWheel is true
     }
     
     func cycleBrushForSelection(forward: Bool) {
