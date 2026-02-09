@@ -40,6 +40,12 @@ struct ContentView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var drawingMode: DrawingMode = .freehand
     @State private var effectMode: EffectMode = .none
+    @State private var leftSliderMode: LeftSliderMode = .opacity
+    
+    enum LeftSliderMode {
+        case opacity
+        case distance
+    }
     @State private var showControllerIcon = false
     @State private var showCrosshair = true  // Tähtäin on/off
     @State private var hideUI = false  // Piilota kaikki UI paitsa silmä-ikoni
@@ -426,16 +432,19 @@ struct ContentView: View {
         }
     }
     
-    // Left edge opacity slider - drag up/down to change opacity
+    // Left edge slider - dual mode: opacity or drawing distance
     var leftEdgeOpacitySlider: some View {
         HStack {
-            // Invisible touch area on left edge
             GeometryReader { geo in
                 let sliderHeight: CGFloat = geo.size.height * 0.55
                 let topOffset: CGFloat = 100
                 
+                let currentValue: Float = leftSliderMode == .opacity
+                    ? drawingEngine.opacity
+                    : drawingEngine.drawingDistanceOffset
+                
                 ZStack(alignment: .leading) {
-                    // Touch area - wider
+                    // Touch area
                     Rectangle()
                         .fill(Color.clear)
                         .frame(width: 70, height: sliderHeight)
@@ -445,16 +454,22 @@ struct ContentView: View {
                             DragGesture(minimumDistance: 0)
                                 .onChanged { value in
                                     let relativeY = (value.location.y - topOffset) / sliderHeight
-                                    let newOpacity = 1.0 - max(0, min(1, relativeY))
-                                    drawingEngine.opacity = Float(newOpacity)
+                                    let newValue = Float(1.0 - max(0, min(1, relativeY)))
+                                    if leftSliderMode == .opacity {
+                                        drawingEngine.opacity = newValue
+                                    } else {
+                                        drawingEngine.drawingDistanceOffset = newValue
+                                    }
                                 }
                         )
                     
-                    // Track background - even more transparent
+                    // Track background
                     RoundedRectangle(cornerRadius: 5)
                         .fill(
                             LinearGradient(
-                                colors: [Color.white.opacity(0.15), Color.white.opacity(0.03)],
+                                colors: leftSliderMode == .opacity
+                                    ? [Color.white.opacity(0.15), Color.white.opacity(0.03)]
+                                    : [Color.cyan.opacity(0.2), Color.cyan.opacity(0.03)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -462,9 +477,11 @@ struct ContentView: View {
                         .frame(width: 10, height: sliderHeight)
                         .position(x: 12, y: topOffset + sliderHeight / 2)
                     
-                    // Current value indicator - more subtle
+                    // Value indicator
                     Circle()
-                        .fill(Color.white.opacity(0.35))
+                        .fill(leftSliderMode == .opacity
+                              ? Color.white.opacity(0.35)
+                              : Color.cyan.opacity(0.5))
                         .frame(width: 18, height: 18)
                         .overlay(
                             Circle().stroke(Color.white.opacity(0.2), lineWidth: 1)
@@ -472,17 +489,38 @@ struct ContentView: View {
                         .shadow(color: .black.opacity(0.15), radius: 2)
                         .position(
                             x: 12,
-                            y: topOffset + sliderHeight * CGFloat(1.0 - drawingEngine.opacity)
+                            y: topOffset + sliderHeight * CGFloat(1.0 - currentValue)
                         )
                     
-                    // Opacity percentage label - more transparent
-                    Text("\(Int(drawingEngine.opacity * 100))")
+                    // Value label
+                    Text(leftSliderMode == .opacity
+                         ? "\(Int(currentValue * 100))"
+                         : String(format: "%.1fm", 0.3 + currentValue * 2.0))
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
                         .foregroundColor(.white.opacity(0.35))
                         .position(
-                            x: 40,
-                            y: topOffset + sliderHeight * CGFloat(1.0 - drawingEngine.opacity)
+                            x: 42,
+                            y: topOffset + sliderHeight * CGFloat(1.0 - currentValue)
                         )
+                    
+                    // Mode toggle button at bottom of slider
+                    Button(action: {
+                        leftSliderMode = leftSliderMode == .opacity ? .distance : .opacity
+                    }) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.black.opacity(0.4))
+                                .frame(width: 28, height: 28)
+                            Image(systemName: leftSliderMode == .opacity
+                                  ? "circle.lefthalf.filled"
+                                  : "arrow.up.and.down.and.sparkles")
+                                .font(.system(size: 13))
+                                .foregroundColor(leftSliderMode == .opacity
+                                                 ? .white.opacity(0.6)
+                                                 : .cyan.opacity(0.8))
+                        }
+                    }
+                    .position(x: 12, y: topOffset + sliderHeight + 25)
                 }
             }
             

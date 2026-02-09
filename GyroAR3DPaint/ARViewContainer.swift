@@ -427,7 +427,12 @@ struct ARViewContainer: UIViewRepresentable {
         
         private func getBrushPosition(from frame: ARFrame) -> SIMD3<Float> {
             let cameraTransform = frame.camera.transform
-            let brushDistance: Float = 0.3
+            let baseDistance: Float = 0.3
+            // Logarithmic curve: slow start, accelerates toward max
+            // At offset 0 → 0 extra, at offset 1 → 2.0m extra
+            let t = drawingEngine?.drawingDistanceOffset ?? 0.0
+            let extraDistance: Float = 2.0 * (log(1.0 + t * 9.0) / log(10.0))
+            let brushDistance = baseDistance + extraDistance
             let forward = SIMD3<Float>(
                 -cameraTransform.columns.2.x,
                 -cameraTransform.columns.2.y,

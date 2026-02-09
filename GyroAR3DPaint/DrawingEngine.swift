@@ -101,6 +101,7 @@ class DrawingEngine: ObservableObject {
     @Published var selectedBrushType: BrushType = .smooth
     @Published var hueShift: Float = 0
     @Published var opacity: Float = 1.0
+    @Published var drawingDistanceOffset: Float = 0.0  // 0.0 = default (0.3m), 1.0 = +2m extra
     @Published var cpuUsage: Double = 0
     @Published var selectedColorIndex: Int = 0
     @Published var useImageColors = false

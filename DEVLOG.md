@@ -678,3 +678,34 @@ brush.onPoint = function(ctx) {
 - `MIDINetworkManager.swift` – Fixed destinations() API usage
 - `project.pbxproj` – Added MIDI files to build
 
+
+
+---
+
+## 2025-02-09 – Session 7b: Drawing Distance Slider
+
+### ✅ COMPLETED: Drawing Distance Control
+
+**Feature:** Left-side slider now has two modes — Opacity and Distance
+
+**How it works:**
+- Left edge slider toggles between opacity (default) and drawing distance mode
+- Small button at bottom of slider switches mode (circle icon ↔ sparkle arrows icon)
+- **Opacity mode** (white): Same as before, 0-100%
+- **Distance mode** (cyan): Controls how far from camera the brush paints
+  - Bottom (0): Default distance (0.3m from camera)
+  - Top (100%): 2.3m from camera (+2m extra)
+  - Logarithmic curve: `2.0 * log(1 + t*9) / log(10)` — fine control at close range, bigger jumps at distance
+  - Label shows actual distance in meters (e.g. "0.3m", "1.2m", "2.3m")
+
+**Technical:**
+- `DrawingEngine.drawingDistanceOffset` — new @Published Float (0-1)
+- `ARViewContainer.getBrushPosition()` — applies logarithmic distance offset to camera forward vector
+- `ContentView.LeftSliderMode` enum — switches between `.opacity` and `.distance`
+- Slider track color changes: white for opacity, cyan for distance
+
+### Files Modified:
+- `DrawingEngine.swift` – Added `drawingDistanceOffset` property
+- `ARViewContainer.swift` – Modified `getBrushPosition()` with logarithmic distance calc
+- `ContentView.swift` – Dual-mode left slider with toggle button
+
