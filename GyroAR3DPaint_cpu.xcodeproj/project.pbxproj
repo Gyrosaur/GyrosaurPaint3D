@@ -20,6 +20,16 @@
 		AAA0000C /* ControllerAndModes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA0001C /* ControllerAndModes.swift */; };
 		AAA0000D /* PerformanceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA0001D /* PerformanceSettings.swift */; };
 		AAA0000E /* VideoEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA0001E /* VideoEditorView.swift */; };
+		BRUSH001 /* BrushDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = BRUSH011 /* BrushDefinition.swift */; };
+		BRUSH002 /* BrushPresetManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BRUSH012 /* BrushPresetManager.swift */; };
+		BRUSH003 /* BrushStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BRUSH013 /* BrushStudioView.swift */; };
+		BRUSH004 /* BrushStudioMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = BRUSH014 /* BrushStudioMode.swift */; };
+		BRUSH005 /* StudioPanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BRUSH015 /* StudioPanels.swift */; };
+		BRUSH006 /* BrushTestCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = BRUSH016 /* BrushTestCanvas.swift */; };
+		BRUSH007 /* BrushDSLParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = BRUSH017 /* BrushDSLParser.swift */; };
+		BRUSH008 /* BrushScriptEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = BRUSH018 /* BrushScriptEngine.swift */; };
+		MIDI0001 /* MIDINetworkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = MIDI0011 /* MIDINetworkManager.swift */; };
+		MIDI0002 /* MIDISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = MIDI0012 /* MIDISettingsView.swift */; };
 		CE226C272F0C48EE00DFF2BF /* AirPodsMotionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE226C262F0C48EE00DFF2BF /* AirPodsMotionManager.swift */; };
 		CE732B9E2F1169AA006E08AA /* Gyro3DColorButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE732B9D2F1169AA006E08AA /* Gyro3DColorButton.swift */; };
 		CE944E512F087B0400FB5510 /* AspectRatioAndGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE944E502F087B0400FB5510 /* AspectRatioAndGallery.swift */; };
@@ -41,6 +51,16 @@
 		AAA0001C /* ControllerAndModes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControllerAndModes.swift; sourceTree = "<group>"; };
 		AAA0001D /* PerformanceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceSettings.swift; sourceTree = "<group>"; };
 		AAA0001E /* VideoEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoEditorView.swift; sourceTree = "<group>"; };
+		BRUSH011 /* BrushDefinition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushDefinition.swift; sourceTree = "<group>"; };
+		BRUSH012 /* BrushPresetManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushPresetManager.swift; sourceTree = "<group>"; };
+		BRUSH013 /* BrushStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushStudioView.swift; sourceTree = "<group>"; };
+		BRUSH014 /* BrushStudioMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushStudioMode.swift; sourceTree = "<group>"; };
+		BRUSH015 /* StudioPanels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioPanels.swift; sourceTree = "<group>"; };
+		BRUSH016 /* BrushTestCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushTestCanvas.swift; sourceTree = "<group>"; };
+		BRUSH017 /* BrushDSLParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushDSLParser.swift; sourceTree = "<group>"; };
+		BRUSH018 /* BrushScriptEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushScriptEngine.swift; sourceTree = "<group>"; };
+		MIDI0011 /* MIDINetworkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MIDINetworkManager.swift; sourceTree = "<group>"; };
+		MIDI0012 /* MIDISettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MIDISettingsView.swift; sourceTree = "<group>"; };
 		CE226C262F0C48EE00DFF2BF /* AirPodsMotionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirPodsMotionManager.swift; sourceTree = "<group>"; };
 		CE732B9D2F1169AA006E08AA /* Gyro3DColorButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gyro3DColorButton.swift; sourceTree = "<group>"; };
 		CE944E502F087B0400FB5510 /* AspectRatioAndGallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AspectRatioAndGallery.swift; sourceTree = "<group>"; };
@@ -68,6 +88,7 @@
 		AAA00031 /* GyroAR3DPaint */ = {
 			isa = PBXGroup;
 			children = (
+				BRUSH010 /* BrushStudio */,
 				AAA00011 /* GyroAR3DPaintApp.swift */,
 				AAA00018 /* ModeSelectionView.swift */,
 				AAA00012 /* ContentView.swift */,
@@ -75,6 +96,8 @@
 				CE732B9D2F1169AA006E08AA /* Gyro3DColorButton.swift */,
 				AAA00014 /* DrawingEngine.swift */,
 				CE226C262F0C48EE00DFF2BF /* AirPodsMotionManager.swift */,
+				MIDI0011 /* MIDINetworkManager.swift */,
+				MIDI0012 /* MIDISettingsView.swift */,
 				AAA00015 /* StrokeRenderer.swift */,
 				AAA00019 /* VirtualGalleryBuilder.swift */,
 				AAA0001A /* VirtualGalleryView.swift */,
@@ -95,6 +118,21 @@
 				AAA00010 /* GyroAR3DPaint.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		BRUSH010 /* BrushStudio */ = {
+			isa = PBXGroup;
+			children = (
+				BRUSH011 /* BrushDefinition.swift */,
+				BRUSH012 /* BrushPresetManager.swift */,
+				BRUSH013 /* BrushStudioView.swift */,
+				BRUSH014 /* BrushStudioMode.swift */,
+				BRUSH015 /* StudioPanels.swift */,
+				BRUSH016 /* BrushTestCanvas.swift */,
+				BRUSH017 /* BrushDSLParser.swift */,
+				BRUSH018 /* BrushScriptEngine.swift */,
+			);
+			path = BrushStudio;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -181,6 +219,16 @@
 				AAA0000C /* ControllerAndModes.swift in Sources */,
 				AAA0000D /* PerformanceSettings.swift in Sources */,
 				AAA0000E /* VideoEditorView.swift in Sources */,
+				BRUSH001 /* BrushDefinition.swift in Sources */,
+				BRUSH002 /* BrushPresetManager.swift in Sources */,
+				BRUSH003 /* BrushStudioView.swift in Sources */,
+				BRUSH004 /* BrushStudioMode.swift in Sources */,
+				BRUSH005 /* StudioPanels.swift in Sources */,
+				BRUSH006 /* BrushTestCanvas.swift in Sources */,
+				BRUSH007 /* BrushDSLParser.swift in Sources */,
+				BRUSH008 /* BrushScriptEngine.swift in Sources */,
+				MIDI0001 /* MIDINetworkManager.swift in Sources */,
+				MIDI0002 /* MIDISettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

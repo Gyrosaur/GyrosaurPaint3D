@@ -2,19 +2,19 @@ import SwiftUI
 
 enum AppMode: String, CaseIterable {
     case realWorld = "Real World AR"
-    case virtualGallery = "White Room"
+    case brushStudio = "Brush Studio"
     
     var icon: String {
         switch self {
         case .realWorld: return "camera.fill"
-        case .virtualGallery: return "cube.fill"
+        case .brushStudio: return "paintbrush.pointed.fill"
         }
     }
     
     var description: String {
         switch self {
         case .realWorld: return "Paint in your real environment"
-        case .virtualGallery: return "Paint in a virtual white space"
+        case .brushStudio: return "Create and customize brushes"
         }
     }
 }

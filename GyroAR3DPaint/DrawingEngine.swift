@@ -85,6 +85,7 @@ struct Stroke: Identifiable {
     var brushType: BrushType
     var points: [StrokePoint] = []
     var isSelected: Bool = false
+    var brushPreset: BrushDefinition? = nil  // Studio preset (nil = use default rendering)
     
     mutating func addPoint(_ point: StrokePoint) {
         points.append(point)
@@ -114,6 +115,18 @@ class DrawingEngine: ObservableObject {
     @Published var sparkleAmount: Float = 0 // RT: sparkle/scatter
     @Published var airPodsGradientValue: Float = 0 // AirPods pään kallistus -1...1
     
+    // MARK: - Brush Studio Integration
+    @Published var activeBrushPreset: BrushDefinition = BrushDefinition.defaultSmooth
+    @Published var useStudioPreset: Bool = false // Toggle between palette and studio
+    
+    // Computed parameters from active preset
+    var presetJitter: Float { useStudioPreset ? activeBrushPreset.stroke.jitter : 0 }
+    var presetSizeVariation: Float { useStudioPreset ? activeBrushPreset.geometry.sizeVariation : 0 }
+    var presetSpacing: Float { useStudioPreset ? activeBrushPreset.stroke.spacing : 0.3 }
+    var presetSmoothing: Float { useStudioPreset ? activeBrushPreset.stroke.smoothing : 0.5 }
+    var presetGravity: SIMD3<Float> { useStudioPreset ? activeBrushPreset.physics.gravity : .zero }
+    var presetTurbulence: Float { useStudioPreset ? activeBrushPreset.physics.turbulence : 0 }
+    
     private var imageColorIndex: Int = 0
     private var cpuTimer: Timer?
     
@@ -134,6 +147,27 @@ class DrawingEngine: ObservableObject {
         cpuTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.cpuUsage = self?.getCPUUsage() ?? 0 }
         }
+    }
+    
+    // MARK: - Brush Studio Methods
+    
+    func applyPreset(_ preset: BrushDefinition) {
+        activeBrushPreset = preset
+        useStudioPreset = true
+        // Map base brush type if available
+        if let baseType = BrushType(rawValue: preset.baseBrushType.capitalized) {
+            selectedBrushType = baseType
+        }
+        // Apply base size from preset
+        brushSize = preset.geometry.baseSize
+    }
+    
+    func disableStudioPreset() {
+        useStudioPreset = false
+    }
+    
+    func toggleStudioPreset() {
+        useStudioPreset.toggle()
     }
     
     // Set color from HSB (controller color wheel)
@@ -166,22 +200,39 @@ class DrawingEngine: ObservableObject {
     }
     
     func startDrawing() {
-        currentStroke = Stroke(color: currentColor, brushType: selectedBrushType)
+        var stroke = Stroke(color: currentColor, brushType: selectedBrushType)
+        // Attach studio preset if active
+        if useStudioPreset {
+            stroke.brushPreset = activeBrushPreset
+        }
+        currentStroke = stroke
         isDrawing = true
     }
     
     func addPoint(_ position: SIMD3<Float>) {
         guard isDrawing, tremoloActive else { return } // Tremolo can skip points
+        
+        // Calculate minimum spacing based on preset
+        let minSpacing: Float = useStudioPreset ? (0.001 + presetSpacing * 0.005) : 0.002
+        
         // Skip points that are too close to reduce CPU/GPU load when recording
         if let last = currentStroke?.points.last {
-            let minSpacing: Float = 0.002 // 2 mm
             if simd_distance(last.position, position) < minSpacing {
                 return
             }
         }
         
-        // Apply sparkle scatter if RT pressed
         var finalPos = position
+        
+        // Apply preset jitter
+        if presetJitter > 0.01 {
+            let jitterAmount = presetJitter * brushSize * activeBrushPreset.stroke.jitterScale
+            finalPos.x += Float.random(in: -jitterAmount...jitterAmount)
+            finalPos.y += Float.random(in: -jitterAmount...jitterAmount)
+            finalPos.z += Float.random(in: -jitterAmount...jitterAmount)
+        }
+        
+        // Apply sparkle scatter if RT pressed (controller)
         if sparkleAmount > 0.1 {
             let scatter = sparkleAmount * brushSize * 3
             finalPos.x += Float.random(in: -scatter...scatter)
@@ -189,14 +240,37 @@ class DrawingEngine: ObservableObject {
             finalPos.z += Float.random(in: -scatter...scatter)
         }
         
+        // Apply preset gravity (accumulates over stroke)
+        if useStudioPreset && simd_length(presetGravity) > 0.0001 {
+            let pointIndex = Float(currentStroke?.points.count ?? 0)
+            finalPos += presetGravity * pointIndex
+        }
+        
+        // Apply preset turbulence
+        if presetTurbulence > 0.01 {
+            let turbScale = activeBrushPreset.physics.turbulenceScale
+            let turb = presetTurbulence * brushSize * turbScale
+            finalPos.x += Float.random(in: -turb...turb)
+            finalPos.y += Float.random(in: -turb...turb)
+            finalPos.z += Float.random(in: -turb...turb)
+        }
+        
         // Haptic feedback based on brush size
         triggerHaptic(for: brushSize * brushSizeMultiplier)
+        
+        // Calculate final brush size with preset variation
+        var finalBrushSize = brushSize * brushSizeMultiplier
+        if presetSizeVariation > 0.01 {
+            let variation = presetSizeVariation * finalBrushSize
+            finalBrushSize += Float.random(in: -variation...variation)
+            finalBrushSize = max(0.001, finalBrushSize) // Ensure positive
+        }
         
         // Lock current color to this point - always set it
         let pointColor = currentColor
         let point = StrokePoint(
             position: finalPos,
-            brushSize: brushSize * brushSizeMultiplier, // LT affects size
+            brushSize: finalBrushSize,
             timestamp: Date().timeIntervalSince1970,
             opacity: opacity,
             color: pointColor,  // Always store current color

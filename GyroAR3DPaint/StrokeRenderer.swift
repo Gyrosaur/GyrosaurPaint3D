@@ -142,8 +142,14 @@ class StrokeRenderer {
     }
     
     // MARK: - Color helpers
-    private func pointColor(_ p: StrokePoint, _ stroke: Stroke, hueShift: Float = 0, gradientPosition: Float = 0.5) -> UIColor {
-        // Use per-point color if available, otherwise stroke color
+    private func pointColor(_ p: StrokePoint, _ stroke: Stroke, hueShift: Float = 0, gradientPosition: Float = 0.5, pointIndex: Int = 0) -> UIColor {
+        
+        // Check if stroke has a brush preset with color mode
+        if let preset = stroke.brushPreset {
+            return applyColorMode(preset.colorMode, baseColor: stroke.color, point: p, stroke: stroke, position: gradientPosition, pointIndex: pointIndex)
+        }
+        
+        // Default behavior: use per-point color or stroke color
         let baseColor: Color
         if let pointCol = p.color {
             baseColor = pointCol
@@ -185,6 +191,173 @@ class StrokeRenderer {
         return col
     }
     
+    // MARK: - Color Mode Application
+    private func applyColorMode(_ colorMode: ColorMode, baseColor: Color, point: StrokePoint, stroke: Stroke, position: Float, pointIndex: Int) -> UIColor {
+        var col = UIColor(baseColor)
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        col.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        
+        switch colorMode.mode {
+        case .solid:
+            // Use base color as-is
+            break
+            
+        case .gradient:
+            // Interpolate between gradient stops
+            if !colorMode.gradientStops.isEmpty {
+                let color = interpolateGradient(colorMode.gradientStops, at: position)
+                col = color
+            }
+            
+        case .rainbow:
+            // Hue shifts along stroke
+            let hueShift = CGFloat(colorMode.hueShiftOverStroke * position)
+            h = (h + hueShift).truncatingRemainder(dividingBy: 1.0)
+            if h < 0 { h += 1 }
+            col = UIColor(hue: h, saturation: s, brightness: b, alpha: a)
+            
+        case .velocity:
+            // Color based on speed (use timestamp diff if available)
+            if pointIndex > 0 && pointIndex < stroke.points.count {
+                let prev = stroke.points[pointIndex - 1]
+                let dist = simd_distance(prev.position, point.position)
+                let timeDiff = max(0.001, Float(point.timestamp - prev.timestamp))
+                let velocity = min(1.0, dist / timeDiff / 0.5) // Normalize to 0-1
+                
+                if !colorMode.velocityColorMap.isEmpty {
+                    col = interpolateGradient(colorMode.velocityColorMap, at: velocity)
+                } else {
+                    // Default: slow=blue, fast=red
+                    h = CGFloat(0.6 - velocity * 0.6) // Blue to red
+                    col = UIColor(hue: h, saturation: s, brightness: b, alpha: a)
+                }
+            }
+            
+        case .noise:
+            // Perlin-style noise coloring
+            let noiseVal = perlinNoise(
+                x: point.position.x * colorMode.noiseScale,
+                y: point.position.y * colorMode.noiseScale,
+                z: point.position.z * colorMode.noiseScale
+            )
+            let hueOffset = CGFloat(noiseVal * 0.5) // -0.25 to +0.25 hue shift
+            h = (h + hueOffset).truncatingRemainder(dividingBy: 1.0)
+            if h < 0 { h += 1 }
+            
+            // Also vary saturation slightly
+            let satNoise = perlinNoise(x: point.position.x * colorMode.noiseScale * 2, y: 0, z: 0)
+            let satRange = colorMode.saturationRange
+            s = CGFloat(satRange.lowerBound + (satRange.upperBound - satRange.lowerBound) * (satNoise + 1) / 2)
+            
+            col = UIColor(hue: h, saturation: s, brightness: b, alpha: a)
+            
+        case .custom:
+            // Future: scripted color mode
+            break
+        }
+        
+        // Apply opacity
+        col = col.withAlphaComponent(CGFloat(point.opacity))
+        
+        // Apply AirPods gradient if present
+        if abs(point.gradientValue) > 0.05 {
+            col.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+            let intensity = abs(CGFloat(point.gradientValue))
+            let brightnessRange: CGFloat = 0.6 * intensity
+            var brightnessAdjust: CGFloat
+            if point.gradientValue < 0 {
+                brightnessAdjust = brightnessRange * (1 - CGFloat(position) * 2)
+            } else {
+                brightnessAdjust = brightnessRange * (CGFloat(position) * 2 - 1)
+            }
+            b = max(0.1, min(1.0, b + brightnessAdjust))
+            col = UIColor(hue: h, saturation: s, brightness: b, alpha: a)
+        }
+        
+        return col
+    }
+    
+    // MARK: - Gradient Interpolation
+    private func interpolateGradient(_ stops: [GradientStop], at position: Float) -> UIColor {
+        guard !stops.isEmpty else { return .white }
+        
+        let sortedStops = stops.sorted { $0.position < $1.position }
+        
+        // Find surrounding stops
+        var lowerStop = sortedStops[0]
+        var upperStop = sortedStops[sortedStops.count - 1]
+        
+        for i in 0..<sortedStops.count - 1 {
+            if position >= sortedStops[i].position && position <= sortedStops[i + 1].position {
+                lowerStop = sortedStops[i]
+                upperStop = sortedStops[i + 1]
+                break
+            }
+        }
+        
+        // Interpolate
+        let range = upperStop.position - lowerStop.position
+        let t = range > 0.001 ? (position - lowerStop.position) / range : 0
+        
+        let h = CGFloat(lowerStop.hue + (upperStop.hue - lowerStop.hue) * t)
+        let s = CGFloat(lowerStop.saturation + (upperStop.saturation - lowerStop.saturation) * t)
+        let b = CGFloat(lowerStop.brightness + (upperStop.brightness - lowerStop.brightness) * t)
+        let a = CGFloat(lowerStop.alpha + (upperStop.alpha - lowerStop.alpha) * t)
+        
+        return UIColor(hue: h, saturation: s, brightness: b, alpha: a)
+    }
+    
+    // MARK: - Simple Perlin Noise
+    private func perlinNoise(x: Float, y: Float, z: Float) -> Float {
+        // Simplified 3D noise approximation
+        let X = Int(floor(x)) & 255
+        let Y = Int(floor(y)) & 255
+        let Z = Int(floor(z)) & 255
+        
+        let xf = x - floor(x)
+        let yf = y - floor(y)
+        let zf = z - floor(z)
+        
+        let u = fade(xf)
+        let v = fade(yf)
+        let w = fade(zf)
+        
+        // Hash values
+        let aaa = hash(X, Y, Z)
+        let aba = hash(X, Y + 1, Z)
+        let aab = hash(X, Y, Z + 1)
+        let abb = hash(X, Y + 1, Z + 1)
+        let baa = hash(X + 1, Y, Z)
+        let bba = hash(X + 1, Y + 1, Z)
+        let bab = hash(X + 1, Y, Z + 1)
+        let bbb = hash(X + 1, Y + 1, Z + 1)
+        
+        // Trilinear interpolation
+        var x1 = lerp(Float(aaa), Float(baa), u)
+        var x2 = lerp(Float(aba), Float(bba), u)
+        let y1 = lerp(x1, x2, v)
+        
+        x1 = lerp(Float(aab), Float(bab), u)
+        x2 = lerp(Float(abb), Float(bbb), u)
+        let y2 = lerp(x1, x2, v)
+        
+        return (lerp(y1, y2, w) / 255.0) * 2 - 1 // Normalize to -1...1
+    }
+    
+    private func fade(_ t: Float) -> Float {
+        return t * t * t * (t * (t * 6 - 15) + 10)
+    }
+    
+    private func lerp(_ a: Float, _ b: Float, _ t: Float) -> Float {
+        return a + t * (b - a)
+    }
+    
+    private func hash(_ x: Int, _ y: Int, _ z: Int) -> Int {
+        var h = x * 374761393 + y * 668265263 + z * 1274126177
+        h = (h ^ (h >> 13)) * 1274126177
+        return h & 255
+    }
+    
     private func randomHueShift() -> Float { Float.random(in: -0.15...0.15) }
     
     // MARK: - Mesh builders
@@ -194,9 +367,10 @@ class StrokeRenderer {
         let level = performanceLevel
         let actualSeg = min(seg, level.tubeSegments)
         
-        // Check if any point has its own color set or gradient
+        // Check if any point has its own color set or gradient, or if preset has color mode
         let hasPerPointColors = pts.contains { $0.color != nil }
         let hasGradient = pts.contains { abs($0.gradientValue) > 0.05 }
+        let hasPresetColorMode = stroke.brushPreset != nil && stroke.brushPreset!.colorMode.mode != .solid
         
         // Adjust max points based on performance level
         let maxPoints: Int
@@ -207,13 +381,13 @@ class StrokeRenderer {
         case .high: maxPoints = 500; minDist = 0.001
         }
         
-        if hasPerPointColors || hasGradient {
+        if hasPerPointColors || hasGradient || hasPresetColorMode {
             let sampled = downsamplePoints(pts, maxCount: maxPoints, minDistance: minDist)
             // Per-point rendering for color variation
             for i in 0..<sampled.count {
                 let p = sampled[i]
                 let gradientPosition = sampled.count > 1 ? Float(i) / Float(sampled.count - 1) : 0.5
-                let col = pointColor(p, stroke, gradientPosition: gradientPosition)
+                let col = pointColor(p, stroke, gradientPosition: gradientPosition, pointIndex: i)
                 let material = SimpleMaterial(color: col, isMetallic: false)
                 
                 let sphere = ModelEntity(mesh: .generateSphere(radius: p.brushSize), materials: [material])
@@ -256,8 +430,9 @@ class StrokeRenderer {
         let parent = ModelEntity()
         let pts = stroke.points
         let hasGradient = pts.contains { abs($0.gradientValue) > 0.05 }
+        let hasPresetColorMode = stroke.brushPreset != nil && stroke.brushPreset!.colorMode.mode != .solid
         
-        if hasGradient {
+        if hasGradient || hasPresetColorMode {
             let sampled = downsamplePoints(pts, maxCount: 400, minDistance: 0.0015)
             // Per-segment rendering with gradient
             for i in 1..<sampled.count {
@@ -265,7 +440,7 @@ class StrokeRenderer {
                             let dir = direction(at: i, pts: sampled)
                 let side = simd_normalize(simd_cross(dir, SIMD3<Float>(0, 1, 0)))
                 let gradientPosition = Float(i) / Float(sampled.count - 1)
-                let col = pointColor(p, stroke, gradientPosition: gradientPosition)
+                let col = pointColor(p, stroke, gradientPosition: gradientPosition, pointIndex: i)
                 
                 let dist = simd_distance(prev.position, p.position)
                 if dist > 0.001 {

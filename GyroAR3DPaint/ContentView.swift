@@ -19,8 +19,11 @@ struct ContentView: View {
     @StateObject var galleryManager = GalleryManager()
     @StateObject var imagePaintSource = ImagePaintSource()
     @StateObject var airPodsManager = AirPodsMotionManager()
+    @StateObject var brushPresetManager = BrushPresetManager()
+    @StateObject var midiManager = MIDINetworkManager.shared
     
     @State private var showBrushPicker = false
+    @State private var showBrushStudio = false
     @State private var showBrushNotes = false
     @State private var notesForBrush: BrushType = .smooth
     @State private var showImagePicker = false
@@ -31,6 +34,7 @@ struct ContentView: View {
     @State private var showImageCrop = false
     @State private var showPaintImagePicker = false
     @State private var showPerformanceSettings = false
+    @State private var showMIDISettings = false
     @State private var paintPhotoItem: PhotosPickerItem?
     @State private var tempPaintImage: UIImage?
     @State private var selectedPhotoItem: PhotosPickerItem?
@@ -38,7 +42,7 @@ struct ContentView: View {
     @State private var effectMode: EffectMode = .none
     @State private var showControllerIcon = false
     @State private var showCrosshair = true  // Tähtäin on/off
-    @State private var hideUI = false  // Piilota kaikki UI paitsi silmä-ikoni
+    @State private var hideUI = false  // Piilota kaikki UI paitsa silmä-ikoni
     @State private var drawingLockActive = false  // Piirrinlukko
     @State private var drawingLockDragOffset: CGFloat = 0
     @State private var uiEditMode = false  // UI järjestely tila
@@ -55,9 +59,11 @@ struct ContentView: View {
     private let minToolbarMargin: CGFloat = 120
     
     @Binding var shouldExit: Bool
+    var onExitToMenu: (() -> Void)?
     
-    init(shouldExit: Binding<Bool>) {
+    init(shouldExit: Binding<Bool> = .constant(false), onExitToMenu: (() -> Void)? = nil) {
         self._shouldExit = shouldExit
+        self.onExitToMenu = onExitToMenu
     }
     
     var body: some View {
@@ -567,6 +573,23 @@ struct ContentView: View {
     var recordingStatusIcons: some View {
         HStack {
             VStack(spacing: 6) {
+                // Back to menu button
+                if let exitAction = onExitToMenu {
+                    Button(action: exitAction) {
+                        ZStack {
+                            Circle()
+                                .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.gray.opacity(0.4), Color.black.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .frame(width: 32, height: 32)
+                            Circle()
+                                .fill(RadialGradient(colors: [Color.white.opacity(0.25), Color.clear], center: .topLeading, startRadius: 0, endRadius: 20))
+                                .frame(width: 30, height: 30)
+                            Image(systemName: "house.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(.white.opacity(0.9))
+                        }
+                    }
+                }
+                
                 // Performance indicator
                 Button(action: { showPerformanceSettings = true }) {
                     ZStack {
@@ -599,6 +622,35 @@ struct ContentView: View {
                 
                 // AirPods icon
                 AirPodsStatusView(manager: airPodsManager)
+                
+                // MIDI Status & Toggle
+                Button(action: { showMIDISettings = true }) {
+                    ZStack {
+                        Circle()
+                            .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.gray.opacity(0.4), Color.black.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .frame(width: 32, height: 32)
+                        Circle()
+                            .fill(RadialGradient(colors: [Color.white.opacity(0.25), Color.clear], center: .topLeading, startRadius: 0, endRadius: 20))
+                            .frame(width: 30, height: 30)
+                        Image(systemName: midiManager.isConnected ? "music.note.list" : "music.note")
+                            .font(.system(size: 14))
+                            .foregroundColor(midiManager.isConnected ? .green : .gray)
+                    }
+                }
+                
+                // MIDI Output ON/OFF Toggle
+                if midiManager.isConnected {
+                    Button(action: { midiManager.isMIDIEnabled.toggle() }) {
+                        ZStack {
+                            Circle()
+                                .fill(midiManager.isMIDIEnabled ? Color.green.opacity(0.3) : Color.gray.opacity(0.2))
+                                .frame(width: 32, height: 32)
+                            Image(systemName: midiManager.isMIDIEnabled ? "waveform" : "waveform.slash")
+                                .font(.system(size: 14))
+                                .foregroundColor(midiManager.isMIDIEnabled ? .green : .gray)
+                        }
+                    }
+                }
             }
             
             Spacer()
@@ -844,11 +896,26 @@ struct ContentView: View {
         ZStack {
             if showBrushPicker { brushPickerModal }
             if showBrushNotes { brushNotesModal }
+            if showBrushStudio { brushStudioModal }
             if showExport { exportModal }
             if showDrawingModes { drawingModesModal }
             if showImageSelector { imageSelectorModal }
             if showPerformanceSettings { performanceSettingsModal }
+            if showMIDISettings { midiSettingsModal }
         }
+    }
+    
+    var brushStudioModal: some View {
+        BrushStudioView(
+            presetManager: brushPresetManager,
+            onApply: { preset in
+                drawingEngine.applyPreset(preset)
+                showBrushStudio = false
+            },
+            onDismiss: {
+                showBrushStudio = false
+            }
+        )
     }
     
     var performanceSettingsModal: some View {
@@ -858,6 +925,14 @@ struct ContentView: View {
             PerformanceSettingsPanel(performanceManager: performanceManager) {
                 showPerformanceSettings = false
             }
+        }
+    }
+    
+    var midiSettingsModal: some View {
+        ZStack {
+            Color.black.opacity(0.5).ignoresSafeArea()
+                .onTapGesture { showMIDISettings = false }
+            MIDISettingsView(midiManager: midiManager)
         }
     }
     
@@ -893,19 +968,22 @@ extension ContentView {
                 SmallToolBtnView(icon: drawingEngine.selectedBrushType.icon, size: 32, hl: false)
             }
             
-            // 3. Crosshair toggle
+            // 3. Brush Studio - highlight when studio preset is active
+            SmallToolBtn(icon: "slider.horizontal.3", size: 32, hl: drawingEngine.useStudioPreset) { showBrushStudio = true }
+            
+            // 4. Crosshair toggle
             SmallToolBtn(icon: showCrosshair ? "plus.circle.fill" : "plus.circle", size: 32, hl: showCrosshair) { showCrosshair.toggle() }
             
-            // 4. Export
+            // 5. Export
             SmallToolBtn(icon: "square.and.arrow.up", size: 32) { showExport = true }
             
-            // 5. Undo
+            // 6. Undo
             SmallToolBtn(icon: "arrow.uturn.backward", size: 32) { drawingEngine.undoLastStroke() }
             
-            // 6. Redo
+            // 7. Redo
             SmallToolBtn(icon: "arrow.uturn.forward", size: 32) { drawingEngine.redoLastStroke() }
             
-            // 7. Clear
+            // 8. Clear
             SmallToolBtn(icon: "trash", size: 32) { drawingEngine.clearAllStrokes() }
             
             Spacer()
@@ -1210,7 +1288,11 @@ extension ContentView {
         ZStack {
             Color.black.opacity(0.2).ignoresSafeArea().onTapGesture { showBrushPicker = false }
             CompactBrushPickerReal(drawingEngine: drawingEngine, ratingManager: brushRatingManager,
-                onSelect: { showBrushPicker = false },
+                onSelect: { 
+                    // Disable studio preset when selecting from palette
+                    drawingEngine.disableStudioPreset()
+                    showBrushPicker = false 
+                },
                 onNotes: { b in notesForBrush = b; showBrushNotes = true })
         }
     }
