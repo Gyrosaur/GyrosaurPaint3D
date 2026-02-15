@@ -117,6 +117,18 @@ struct ARViewContainer: UIViewRepresentable {
             
             let brushPosition = getBrushPosition(from: frame)
             
+            // Right stick (R3 pressed) → smooth distance control
+            if let cm = controllerManager, cm.isConnected, cm.rightStickButton {
+                let stickY = cm.rightStickY  // -1 to 1
+                let deadzone: Float = 0.15
+                if abs(stickY) > deadzone {
+                    let input = (stickY - (stickY > 0 ? deadzone : -deadzone)) / (1.0 - deadzone)
+                    let speed: Float = 0.008  // smooth ramp speed per frame
+                    let newVal = drawingEngine.drawingDistanceOffset + input * speed
+                    drawingEngine.drawingDistanceOffset = max(0, min(1, newVal))
+                }
+            }
+            
             // Handle controller drawing (LT/RT triggers)
             handleControllerDrawing(at: brushPosition)
             
@@ -429,9 +441,9 @@ struct ARViewContainer: UIViewRepresentable {
             let cameraTransform = frame.camera.transform
             let baseDistance: Float = 0.3
             // Logarithmic curve: slow start, accelerates toward max
-            // At offset 0 → 0 extra, at offset 1 → 2.0m extra
+            // At offset 0 → 0 extra, at offset 1 → 500.0m extra
             let t = drawingEngine?.drawingDistanceOffset ?? 0.0
-            let extraDistance: Float = 2.0 * (log(1.0 + t * 9.0) / log(10.0))
+            let extraDistance: Float = 500.0 * (log(1.0 + t * 9.0) / log(10.0))
             let brushDistance = baseDistance + extraDistance
             let forward = SIMD3<Float>(
                 -cameraTransform.columns.2.x,

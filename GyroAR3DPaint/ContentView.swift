@@ -50,6 +50,7 @@ struct ContentView: View {
     @State private var showCrosshair = true  // Tähtäin on/off
     @State private var hideUI = false  // Piilota kaikki UI paitsa silmä-ikoni
     @State private var drawingLockActive = false  // Piirrinlukko
+    @State private var showBrushSizeSettings = false
     @State private var drawingLockDragOffset: CGFloat = 0
     @State private var uiEditMode = false  // UI järjestely tila
     @State private var toolRowAtBottom = false  // Tool row sijainti
@@ -495,7 +496,7 @@ struct ContentView: View {
                     // Value label
                     Text(leftSliderMode == .opacity
                          ? "\(Int(currentValue * 100))"
-                         : String(format: "%.1fm", 0.3 + currentValue * 2.0))
+                         : String(format: "%.0fm", 0.3 + currentValue * 500.0))
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
                         .foregroundColor(.white.opacity(0.35))
                         .position(
@@ -521,11 +522,76 @@ struct ContentView: View {
                         }
                     }
                     .position(x: 12, y: topOffset + sliderHeight + 25)
+                    
+                    // Brush size range button
+                    Button(action: {
+                        showBrushSizeSettings.toggle()
+                    }) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.black.opacity(0.4))
+                                .frame(width: 28, height: 28)
+                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                .font(.system(size: 12))
+                                .foregroundColor(.white.opacity(0.6))
+                        }
+                    }
+                    .position(x: 12, y: topOffset + sliderHeight + 58)
+                    .popover(isPresented: $showBrushSizeSettings) {
+                        brushSizeSettingsPopover
+                    }
                 }
             }
             
             Spacer()
         }
+    }
+    
+    var brushSizeSettingsPopover: some View {
+        VStack(spacing: 16) {
+            Text("BRUSH SIZE")
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundColor(.white.opacity(0.7))
+            
+            VStack(spacing: 8) {
+                HStack {
+                    Text("Min")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.5))
+                    Spacer()
+                    Text(String(format: "%.1fmm", drawingEngine.brushSizeMin * 1000))
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundColor(.white)
+                }
+                Slider(value: $drawingEngine.brushSizeMin, in: 0.001...0.05, step: 0.001)
+                    .tint(.cyan)
+            }
+            
+            VStack(spacing: 8) {
+                HStack {
+                    Text("Max")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.5))
+                    Spacer()
+                    Text(String(format: "%.0fmm", drawingEngine.brushSizeMax * 1000))
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundColor(.white)
+                }
+                Slider(value: $drawingEngine.brushSizeMax, in: 0.01...0.5, step: 0.005)
+                    .tint(.cyan)
+            }
+            
+            Button("Reset") {
+                drawingEngine.brushSizeMin = 0.002
+                drawingEngine.brushSizeMax = 0.05
+            }
+            .font(.system(size: 11, design: .monospaced))
+            .foregroundColor(.cyan.opacity(0.8))
+        }
+        .padding(16)
+        .frame(width: 220)
+        .background(Color.black.opacity(0.9))
+        .presentationCompactAdaptation(.popover)
     }
     
     var arLayer: some View {

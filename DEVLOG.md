@@ -709,3 +709,85 @@ brush.onPoint = function(ctx) {
 - `ARViewContainer.swift` – Modified `getBrushPosition()` with logarithmic distance calc
 - `ContentView.swift` – Dual-mode left slider with toggle button
 
+
+---
+
+## 2025-02-15 – Session 8: Distance Range Expansion & Brush Size Settings
+
+### ✅ COMPLETED: Extended Drawing Distance
+
+**Change:** Max drawing distance increased from 2.3m to 12.3m
+- `ARViewContainer.swift` → `getBrushPosition()`: `extraDistance` multiplier changed from `2.0` to `12.0`
+- Same logarithmic curve preserved: fine control close, bigger jumps far
+- Distance label in ContentView updated to show correct range (0.3m–12.3m)
+
+### ✅ COMPLETED: Configurable Brush Size Range
+
+**New properties in DrawingEngine:**
+- `brushSizeMin: Float` (default 0.002) — minimum brush size
+- `brushSizeMax: Float` (default 0.05) — maximum brush size
+- `setBrushSizeNormalized()` now uses these instead of hardcoded values
+
+**New UI:**
+- Button below the left slider mode toggle (resize arrows icon)
+- Opens popover with Min/Max sliders
+- Min range: 1mm–50mm, Max range: 10mm–500mm
+- Reset button restores defaults
+- Allows much larger brushes for distant painting
+
+### Files Modified:
+- `ARViewContainer.swift` – Increased max extra distance to 12m
+- `DrawingEngine.swift` – Added brushSizeMin/Max, updated setBrushSizeNormalized
+- `ContentView.swift` – Added brush size settings button + popover, updated distance label
+
+---
+
+## 2025-02-15 – Session 8b: Distance 5× Increase
+
+- Max drawing distance: 12.3m → 60.3m
+- ARViewContainer extraDistance multiplier: 12.0 → 60.0
+- Distance label updated accordingly
+
+---
+
+## 2025-02-15 – Session 8c: 500m Distance + Brush Ride Zoom
+
+### ✅ Distance pushed to 500m
+- extraDistance multiplier: 60.0 → 500.0
+- Same log curve, max now 500.3m from camera
+- Distance label switched to integer meters for readability
+
+### ✅ Brush Ride mode
+- New `brushRideEnabled` bool in DrawingEngine
+- When active + distance offset > 0: ARView layer scales up to 5× zoom
+- Creates "flying with the brush" illusion — camera zooms as you push distance further
+- Airplane icon toggle button below brush size settings button on left slider
+- Cyan highlight when active
+- Uses `CATransform3DMakeScale` on ARView layer — works on both camera feed and 3D content
+- Resets to identity when disabled or distance at zero
+
+### Files Modified:
+- `ARViewContainer.swift` – 500m distance, brush ride zoom in frameUpdate
+- `DrawingEngine.swift` – Added brushRideEnabled property
+- `ContentView.swift` – Brush ride toggle button, distance label updated
+
+---
+
+## 2025-02-15 – Session 8d: Right Stick Distance Control + Brush Ride Removed
+
+### ✅ Right stick (R3 pressed) controls drawing distance
+- Hold R3 (right stick click) + push stick up/down → distance fader moves
+- Deadzone 0.15 to prevent drift
+- Smooth ramp: speed 0.008 per frame — takes ~2 seconds full sweep
+- Works alongside the touch slider (both control same `drawingDistanceOffset`)
+
+### ❌ Brush Ride removed
+- Layer transform zoom was too heavy for iPhone 15 Pro
+- Removed zoom logic from frameUpdate
+- Removed airplane toggle button from UI
+- `brushRideEnabled` property kept in DrawingEngine but unused (no UI)
+
+### Files Modified:
+- `ARViewContainer.swift` – Added R3+stick distance control in frameUpdate, removed brush ride zoom
+- `ContentView.swift` – Removed brush ride toggle button
+

@@ -101,7 +101,10 @@ class DrawingEngine: ObservableObject {
     @Published var selectedBrushType: BrushType = .smooth
     @Published var hueShift: Float = 0
     @Published var opacity: Float = 1.0
-    @Published var drawingDistanceOffset: Float = 0.0  // 0.0 = default (0.3m), 1.0 = +2m extra
+    @Published var drawingDistanceOffset: Float = 0.0  // 0.0 = default (0.3m), 1.0 = +12m extra
+    @Published var brushSizeMin: Float = 0.002
+    @Published var brushSizeMax: Float = 0.05
+    @Published var brushRideEnabled: Bool = false
     @Published var cpuUsage: Double = 0
     @Published var selectedColorIndex: Int = 0
     @Published var useImageColors = false
@@ -351,7 +354,7 @@ class DrawingEngine: ObservableObject {
     }
     
     func setBrushSizeNormalized(_ value: Float) {
-        brushSize = 0.002 + value * 0.05
+        brushSize = brushSizeMin + value * (brushSizeMax - brushSizeMin)
     }
     
     func loadImageColors() {
