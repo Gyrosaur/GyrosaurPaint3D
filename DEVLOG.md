@@ -813,3 +813,50 @@ Lisätään mikrofoni piirron ohjaukseen GPT:n suunnitelman mukaisesti:
 - `ARViewContainer.swift` – käyttää drawingEngine.micGateActive piirron gatena
 - `Info.plist` – NSMicrophoneUsageDescription (jos ei jo ole)
 
+
+---
+
+## 2025-03-11 – Session 9b: Mic dynamics redesign
+
+### Muutos edelliseen (Session 9) suunnitelmaan
+GPT:n ehdotuksen pohjalta mic-logiikka muutettiin:
+- **Ei opacity-ohjausta** mikrofonista
+- **Amplitude → brush size** (dynaamisuus näkyy viivan paksuutena)
+- **Spectral centroid → hue shift** (sävelkorkeus värjää jäljen)
+- Opacity pysyy manuaalisena kuten gyro-moodissa
+
+### Tekniset muutokset
+
+**`MicInputManager.swift`** – uudelleenkirjoitettu
+- Lisätty Accelerate-framework FFT (1024 pistettä, Hann-ikkuna)
+- `computeSpectralCentroid()`: painotettu taajuuskeskiö 0 Hz–(sr/2) alueelta
+- Spectral centroid mapattuu log-asteikolla 80 Hz → 4 kHz → arvo 0–1
+- Hidas hue-smoothing (kerroin 0.94) → väri liukuu musiikillisesti, ei värähtele
+- Hiljainen → hue palaa hitaasti nollaan (kerroin 0.97)
+- Uusi @Published: `pitchHue: Float`
+
+**`DrawingEngine.swift`**
+- `micOpacity` poistettu
+- Lisätty `micBrushScale: Float` (0–1, amplitude → brush size interpolointi)
+- Lisätty `micHueShift: Float` (spectral centroid → hue rotaatio)
+
+**`ARViewContainer.swift`** – uusi mic-logiikka frameUpdatessa
+- Amplitude: `brushSize = brushSizeMin + scale * (brushSizeMax - brushSizeMin)`
+- Pitch: `hueShift = (micHueShift - 0.5) * 0.4`  (±0.2 rotaatio)
+- Opacity: ei muuteta
+
+**`ContentView.swift`** – setupMicBinding päivitetty
+- Amplitude → `micBrushScale`
+- `pitchHue` → `micHueShift`
+- gyro-tilaan palatessa `micBrushScale` ja `micHueShift` nollataan
+
+### Käyttökokemus
+- **Matala ääni / basso**: kylmä sävy, paksu viiva
+- **Korkea / terävä ääni**: lämmin sävy, ohut viiva
+- **Hiljaisuus**: piirto katkeaa (gate)
+- Voi puhua, laulaa, taputtaa, hengittää → kaikki tuottaa erilaista jälkeä
+
+### Git
+- Commit: `c928844`
+- Branch: main, up to date with origin/main
+
