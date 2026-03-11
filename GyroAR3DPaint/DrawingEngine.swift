@@ -118,7 +118,14 @@ class DrawingEngine: ObservableObject {
     @Published var brushSizeMultiplier: Float = 1.0 // LT: size boost
     @Published var sparkleAmount: Float = 0 // RT: sparkle/scatter
     @Published var airPodsGradientValue: Float = 0 // AirPods pään kallistus -1...1
-    
+
+    // MARK: - Mic Input
+    @Published var inputSource: DrawingInputSource = .gyro
+    /// Gate from MicInputManager: true = draw, false = stop. Only used in .mic / .both mode.
+    @Published var micGateActive: Bool = false
+    /// Opacity from mic amplitude (0–1). Applied instead of manual opacity in mic mode.
+    @Published var micOpacity: Float = 1.0
+
     // MARK: - Brush Studio Integration
     @Published var activeBrushPreset: BrushDefinition = BrushDefinition.defaultSmooth
     @Published var useStudioPreset: Bool = false // Toggle between palette and studio

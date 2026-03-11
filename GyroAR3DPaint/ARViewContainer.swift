@@ -132,6 +132,19 @@ struct ARViewContainer: UIViewRepresentable {
             // Handle controller drawing (LT/RT triggers)
             handleControllerDrawing(at: brushPosition)
             
+            // Mic gate: in mic/both mode override opacity with mic amplitude
+            let micMode = drawingEngine.inputSource
+            if micMode == .mic || micMode == .both {
+                // Gate: start/stop drawing based on mic amplitude
+                if drawingEngine.micGateActive && !drawingEngine.isDrawing {
+                    drawingEngine.startDrawing()
+                } else if !drawingEngine.micGateActive && drawingEngine.isDrawing {
+                    _ = drawingEngine.stopDrawing()
+                }
+                // Amplitude → opacity
+                drawingEngine.opacity = drawingEngine.micOpacity
+            }
+
             // Handle different drawing modes
             switch drawingMode {
             case .freehand:

@@ -60,5 +60,7 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Gyrosaur Paint uses your microphone to control brush opacity and drawing with sound amplitude.</string>
 </dict>
 </plist>

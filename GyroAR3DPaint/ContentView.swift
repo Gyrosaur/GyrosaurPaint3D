@@ -21,6 +21,7 @@ struct ContentView: View {
     @StateObject var airPodsManager = AirPodsMotionManager()
     @StateObject var brushPresetManager = BrushPresetManager()
     @StateObject var midiManager = MIDINetworkManager.shared
+    @StateObject var micManager = MicInputManager()
     
     @State private var showBrushPicker = false
     @State private var showBrushStudio = false
@@ -79,7 +80,7 @@ struct ContentView: View {
             .photosPicker(isPresented: $showPaintImagePicker, selection: $paintPhotoItem, matching: .images)
             .onChange(of: selectedPhotoItem) { _, n in handleImagePick(n) }
             .onChange(of: paintPhotoItem) { _, n in handlePaintImagePick(n) }
-            .onAppear { startTremoloTimer(); setupControllerBindings(); setupAirPodsBinding() }
+            .onAppear { startTremoloTimer(); setupControllerBindings(); setupAirPodsBinding(); setupMicBinding() }
     }
     
     func setupControllerBindings() {
@@ -235,6 +236,30 @@ struct ContentView: View {
             drawingEngine.airPodsGradientValue = value
         }.store(in: &controllerCancellables)
     }
+
+    func setupMicBinding() {
+        // Forward mic gate and amplitude to drawingEngine
+        micManager.$gateOpen.sink { [self] gate in
+            drawingEngine.micGateActive = gate
+        }.store(in: &controllerCancellables)
+
+        micManager.$amplitude.sink { [self] amp in
+            // Map amplitude to opacity (minimum 0.05 so there's always some ink)
+            drawingEngine.micOpacity = max(0.05, min(1.0, amp))
+        }.store(in: &controllerCancellables)
+
+        // Start/stop mic engine when inputSource changes
+        drawingEngine.$inputSource.sink { [self] source in
+            switch source {
+            case .mic, .both:
+                micManager.start()
+            case .gyro:
+                micManager.stop()
+                // Restore manual opacity when switching back
+                drawingEngine.opacity = 1.0
+            }
+        }.store(in: &controllerCancellables)
+    }
     
     @State private var controllerCancellables = Set<AnyCancellable>()
     
@@ -373,6 +398,54 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    // Input source selector: cycles Gyro → Mic → Both
+    var inputSourceButton: some View {
+        Button(action: {
+            let all = DrawingInputSource.allCases
+            if let idx = all.firstIndex(of: drawingEngine.inputSource) {
+                drawingEngine.inputSource = all[(idx + 1) % all.count]
+            }
+        }) {
+            ZStack {
+                Circle()
+                    .fill(inputSourceGradient)
+                    .frame(width: 32, height: 32)
+                Circle()
+                    .fill(RadialGradient(colors: [Color.white.opacity(0.25), Color.clear],
+                                        center: .topLeading, startRadius: 0, endRadius: 20))
+                    .frame(width: 30, height: 30)
+                Image(systemName: drawingEngine.inputSource.icon)
+                    .font(.system(size: 14))
+                    .foregroundColor(inputSourceColor)
+                // Mic activity pulse ring
+                if (drawingEngine.inputSource == .mic || drawingEngine.inputSource == .both)
+                    && micManager.gateOpen {
+                    Circle()
+                        .stroke(Color.green.opacity(0.8), lineWidth: 2)
+                        .frame(width: 34, height: 34)
+                }
+            }
+        }
+    }
+
+    private var inputSourceColor: Color {
+        switch drawingEngine.inputSource {
+        case .gyro: return .white
+        case .mic:  return .green
+        case .both: return .cyan
+        }
+    }
+
+    private var inputSourceGradient: LinearGradient {
+        let colors: [Color]
+        switch drawingEngine.inputSource {
+        case .gyro: colors = [Color.white.opacity(0.2), Color.gray.opacity(0.4), Color.black.opacity(0.5)]
+        case .mic:  colors = [Color.green.opacity(0.3), Color.green.opacity(0.15), Color.black.opacity(0.5)]
+        case .both: colors = [Color.cyan.opacity(0.3), Color.cyan.opacity(0.15), Color.black.opacity(0.5)]
+        }
+        return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
     private func cameraLayout(in size: CGSize) -> (cameraSize: CGSize, verticalMargin: CGFloat) {
@@ -726,6 +799,9 @@ struct ContentView: View {
                 
                 // AirPods icon
                 AirPodsStatusView(manager: airPodsManager)
+
+                // Input source selector (Gyro / Mic / Both)
+                inputSourceButton
                 
                 // MIDI Status & Toggle
                 Button(action: { showMIDISettings = true }) {

@@ -791,3 +791,25 @@ brush.onPoint = function(ctx) {
 - `ARViewContainer.swift` – Added R3+stick distance control in frameUpdate, removed brush ride zoom
 - `ContentView.swift` – Removed brush ride toggle button
 
+
+---
+
+## 2025-03-11 – Session 9: Mikrofoni-piirto (Mic Input Source)
+
+### Tavoite
+Lisätään mikrofoni piirron ohjaukseen GPT:n suunnitelman mukaisesti:
+- Input source selector (gyro / mic / molemmat)
+- AVAudioEngine + RMS amplitude -laskenta reaaliajassa
+- Threshold gate: ääni avaa/sulkee piirron
+- Amplitude → opacity -mappaus
+- MicInputManager.swift (uusi tiedosto)
+- ContentView.swift: input source toggle UI + MicInputManager @StateObject
+- DrawingEngine.swift: micGateActive + micOpacity properties
+
+### Tiedostot joihin tehdään muutoksia
+- `MicInputManager.swift` – uusi, AVAudioEngine + RMS
+- `DrawingEngine.swift` – micGateActive, micOpacity, inputSource
+- `ContentView.swift` – input selector button + MicInputManager
+- `ARViewContainer.swift` – käyttää drawingEngine.micGateActive piirron gatena
+- `Info.plist` – NSMicrophoneUsageDescription (jos ei jo ole)
+
