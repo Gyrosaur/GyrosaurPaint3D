@@ -121,10 +121,12 @@ class DrawingEngine: ObservableObject {
 
     // MARK: - Mic Input
     @Published var inputSource: DrawingInputSource = .gyro
-    /// Gate from MicInputManager: true = draw, false = stop. Only used in .mic / .both mode.
+    /// Gate: true = draw, false = stop. Driven by MicInputManager.gateOpen.
     @Published var micGateActive: Bool = false
-    /// Opacity from mic amplitude (0–1). Applied instead of manual opacity in mic mode.
-    @Published var micOpacity: Float = 1.0
+    /// Amplitude 0–1 → brush size multiplier. 0 = brushSizeMin, 1 = brushSizeMax.
+    @Published var micBrushScale: Float = 0.0
+    /// Spectral centroid 0–1 → hue rotation added to current stroke colour.
+    @Published var micHueShift: Float = 0.0
 
     // MARK: - Brush Studio Integration
     @Published var activeBrushPreset: BrushDefinition = BrushDefinition.defaultSmooth

@@ -238,14 +238,19 @@ struct ContentView: View {
     }
 
     func setupMicBinding() {
-        // Forward mic gate and amplitude to drawingEngine
+        // Gate → micGateActive
         micManager.$gateOpen.sink { [self] gate in
             drawingEngine.micGateActive = gate
         }.store(in: &controllerCancellables)
 
+        // Amplitude → brush size scale (0 = min, 1 = max)
         micManager.$amplitude.sink { [self] amp in
-            // Map amplitude to opacity (minimum 0.05 so there's always some ink)
-            drawingEngine.micOpacity = max(0.05, min(1.0, amp))
+            drawingEngine.micBrushScale = amp
+        }.store(in: &controllerCancellables)
+
+        // Spectral centroid → hue shift
+        micManager.$pitchHue.sink { [self] hue in
+            drawingEngine.micHueShift = hue
         }.store(in: &controllerCancellables)
 
         // Start/stop mic engine when inputSource changes
@@ -255,8 +260,8 @@ struct ContentView: View {
                 micManager.start()
             case .gyro:
                 micManager.stop()
-                // Restore manual opacity when switching back
-                drawingEngine.opacity = 1.0
+                drawingEngine.micBrushScale = 0
+                drawingEngine.micHueShift   = 0
             }
         }.store(in: &controllerCancellables)
     }

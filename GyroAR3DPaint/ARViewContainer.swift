@@ -132,17 +132,21 @@ struct ARViewContainer: UIViewRepresentable {
             // Handle controller drawing (LT/RT triggers)
             handleControllerDrawing(at: brushPosition)
             
-            // Mic gate: in mic/both mode override opacity with mic amplitude
+            // Mic gate + dynamics: amplitude → brush size, pitch → hue shift
             let micMode = drawingEngine.inputSource
             if micMode == .mic || micMode == .both {
-                // Gate: start/stop drawing based on mic amplitude
+                // Gate: open/close drawing based on sound
                 if drawingEngine.micGateActive && !drawingEngine.isDrawing {
                     drawingEngine.startDrawing()
                 } else if !drawingEngine.micGateActive && drawingEngine.isDrawing {
                     _ = drawingEngine.stopDrawing()
                 }
-                // Amplitude → opacity
-                drawingEngine.opacity = drawingEngine.micOpacity
+                // Amplitude → brush size (lerp between brushSizeMin and brushSizeMax)
+                let scale = drawingEngine.micBrushScale
+                drawingEngine.brushSize = drawingEngine.brushSizeMin
+                    + scale * (drawingEngine.brushSizeMax - drawingEngine.brushSizeMin)
+                // Spectral centroid → hue shift (−0.5…+0.5 mapped to 0…+0.4 range)
+                drawingEngine.hueShift = (drawingEngine.micHueShift - 0.5) * 0.4
             }
 
             // Handle different drawing modes
