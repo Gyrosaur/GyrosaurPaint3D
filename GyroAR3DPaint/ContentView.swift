@@ -447,18 +447,18 @@ struct ContentView: View {
     // Camera color button: toggles picker mode + cycles color mode on long press
     var cameraColorButton: some View {
         Button(action: {
-            if showCameraColorPicker {
-                // Already in picker mode → close picker, keep colors active
+            if drawingEngine.cameraColorEnabled {
+                // Already active → turn off
+                drawingEngine.cameraColorEnabled = false
                 showCameraColorPicker = false
                 cameraPickerCirclePos = .zero
-            } else if drawingEngine.cameraColorEnabled {
-                // Colors active but picker closed → disable camera colors entirely
-                drawingEngine.cameraColorEnabled = false
-                cameraPickerCirclePos = .zero
             } else {
-                // Off → open picker to sample
-                showCameraColorPicker = true
+                // Turn on: place circle at screen center and sample immediately
                 drawingEngine.cameraColorEnabled = true
+                showCameraColorPicker = false  // no tap-to-place mode needed
+                cameraPickerCirclePos = CGPoint(x: UIScreen.main.bounds.midX,
+                                               y: UIScreen.main.bounds.midY)
+                sampleCameraColorsAtCurrentPos()
             }
         }) {
             ZStack {
@@ -486,6 +486,7 @@ struct ContentView: View {
         }
         .simultaneousGesture(
             LongPressGesture(minimumDuration: 0.4).onEnded { _ in
+                // Long press on button cycles color mode (SEQ/RND/DRV)
                 let modes = CameraColorMode.allCases
                 if let idx = modes.firstIndex(of: drawingEngine.cameraColorMode) {
                     drawingEngine.cameraColorMode = modes[(idx + 1) % modes.count]
@@ -523,45 +524,64 @@ struct ContentView: View {
     var cameraPickerOverlay: some View {
         GeometryReader { geo in
             ZStack {
-                // Fullscreen tap area — ONE tap picks colors, then overlay dismisses
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture { location in
-                        cameraPickerCirclePos = location
-                        sampleCameraColors(at: location, in: geo.size)
-                        // Auto-dismiss picker after sampling so drawing works again
-                        showCameraColorPicker = false
-                    }
+                // Tap-to-reposition layer — only active when showCameraColorPicker is true
+                if showCameraColorPicker {
+                    Color.black.opacity(0.01)   // nearly invisible, just catches taps
+                        .contentShape(Rectangle())
+                        .onTapGesture { location in
+                            cameraPickerCirclePos = location
+                            sampleCameraColors(at: location, in: geo.size)
+                            showCameraColorPicker = false  // lock position, back to draw mode
+                        }
+                }
 
-                // Circle indicator at selected position
+                // Permanent circle indicator (shown whenever camera color is enabled)
                 if cameraPickerCirclePos != .zero {
                     ZStack {
+                        // Outer ring — pulses orange when in reposition mode
                         Circle()
-                            .stroke(Color.white, lineWidth: 2)
+                            .stroke(showCameraColorPicker ? Color.orange : Color.white,
+                                    lineWidth: showCameraColorPicker ? 3 : 2)
                             .frame(width: 80, height: 80)
                         Circle()
                             .stroke(Color.black.opacity(0.4), lineWidth: 1)
                             .frame(width: 82, height: 82)
-                        // Mini palette preview
+
+                        // Mini palette preview dots
                         HStack(spacing: 2) {
                             ForEach(drawingEngine.cameraColorPalette.prefix(6), id: \.self) { c in
                                 Circle().fill(c).frame(width: 8, height: 8)
                             }
                         }
                         .offset(y: 48)
-                        Text("CAM")
+
+                        // Label: CAM or MOVE
+                        Text(showCameraColorPicker ? "TAP" : "CAM")
                             .font(.system(size: 8, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
+                            .foregroundColor(showCameraColorPicker ? .orange : .white)
                             .offset(y: -44)
                     }
                     .position(cameraPickerCirclePos)
-                    .allowsHitTesting(false)
+                    // Long press on circle → enter reposition mode
+                    .gesture(
+                        LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+                            let impact = UIImpactFeedbackGenerator(style: .medium)
+                            impact.impactOccurred()
+                            showCameraColorPicker = true  // tap-to-place mode
+                        }
+                    )
                 }
             }
         }
     }
 
     @State private var isSamplingColors = false
+
+    /// Called from button (no geometry available) — uses screen size and current circle position
+    func sampleCameraColorsAtCurrentPos() {
+        let screenSize = UIScreen.main.bounds.size
+        sampleCameraColors(at: cameraPickerCirclePos, in: screenSize)
+    }
 
     func sampleCameraColors(at point: CGPoint, in size: CGSize) {
         guard let arView = arViewRef, !isSamplingColors else { return }
@@ -850,8 +870,8 @@ struct ContentView: View {
                 leftEdgeOpacitySlider
             }
 
-            // Camera color picker: tap anywhere to place the sample circle
-            if showCameraColorPicker && !hideUI {
+            // Camera color circle: always visible when enabled, tap-layer only when repositioning
+            if drawingEngine.cameraColorEnabled && !hideUI {
                 cameraPickerOverlay
             }
         }
