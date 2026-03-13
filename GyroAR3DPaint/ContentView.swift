@@ -447,10 +447,18 @@ struct ContentView: View {
     // Camera color button: toggles picker mode + cycles color mode on long press
     var cameraColorButton: some View {
         Button(action: {
-            showCameraColorPicker.toggle()
-            drawingEngine.cameraColorEnabled = showCameraColorPicker
-            if !showCameraColorPicker {
+            if showCameraColorPicker {
+                // Already in picker mode → close picker, keep colors active
+                showCameraColorPicker = false
                 cameraPickerCirclePos = .zero
+            } else if drawingEngine.cameraColorEnabled {
+                // Colors active but picker closed → disable camera colors entirely
+                drawingEngine.cameraColorEnabled = false
+                cameraPickerCirclePos = .zero
+            } else {
+                // Off → open picker to sample
+                showCameraColorPicker = true
+                drawingEngine.cameraColorEnabled = true
             }
         }) {
             ZStack {
@@ -515,12 +523,14 @@ struct ContentView: View {
     var cameraPickerOverlay: some View {
         GeometryReader { geo in
             ZStack {
-                // Fullscreen tap area to place the circle
+                // Fullscreen tap area — ONE tap picks colors, then overlay dismisses
                 Color.clear
                     .contentShape(Rectangle())
                     .onTapGesture { location in
                         cameraPickerCirclePos = location
                         sampleCameraColors(at: location, in: geo.size)
+                        // Auto-dismiss picker after sampling so drawing works again
+                        showCameraColorPicker = false
                     }
 
                 // Circle indicator at selected position
