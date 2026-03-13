@@ -953,3 +953,39 @@ kullekin inputille valitaan **yksi** vaikutus.
 
 ### Status: [ ] 10a [ ] 10b [ ] 10c
 
+
+### STATUS PÄIVITETTY – kaikki valmis ✅
+
+**10a – MIDI send -bugi** ✅
+- `MIDISettingsView`: lisätty `onDismiss: (() -> Void)?` parametri ja `closeSelf()`
+  joka kutsuu sekä callbackia että `dismiss()` → modalin sulkeminen toimii aina
+- `MIDINetworkManager.disconnect()`: nollaa nyt `networkSession = nil` ja
+  `isMIDIEnabled = false` → ei jää jumiin connected-tilaan
+- `ContentView.midiSettingsModal`: välittää `onDismiss: { showMIDISettings = false }`
+
+**10b – Kameran väripaletti** ✅
+- `CameraColorSampler.swift` (uusi): ottaa ARView snapshotin, näytteistää N pikseliä
+  ympyräalueelta (uniform disk sampling), filtteröi tummat/harmaat (bri > 0.15, sat > 0.05),
+  deduplicoi HSB-etäisyydellä (minHueDist 0.04) → 24 väriä paletissa
+- `DrawingEngine`: `cameraColorPalette`, `cameraColorMode`, `cameraColorEnabled`,
+  `nextCameraColor()`, `advanceCameraColorSequence()`
+- `DrawingEngine.addPoint`: per-piste väri tulee paletista jos `cameraColorEnabled`
+- `ContentView`: nappi vasemmassa reunassa (camera.aperture ikoni, oranssi = aktiivinen),
+  long press kiertää modia (SEQ/RND/DRV badge), tap ruudulle = circle overlay +
+  ARView snapshot → `CameraColorSampler.sample()` → paletti päivittyy välittömästi
+
+**10c – Input Settings** ✅
+- `InputSettingsManager.swift`: `InputChannel` (phoneGyro/airPodsGyro/mic/leftSlider),
+  `InputParameter` (none/brushSize/opacity/hueShift/distance/colorIndex),
+  `apply(channel:value:to:)` normalisoitu 0–1 → DrawingEngine-parametri
+- `InputSettingsView.swift`: NavigationView Form, Picker per kanava + camera color mode
+- `ARViewContainer`: `inputSettingsManager` property, phone gyro = camera yaw → 0–1
+  per frame → `apply(channel: .phoneGyro, ...)`
+- `ContentView.setupAirPodsBinding`: AirPods -1…1 → 0–1 → `apply(.airPodsGyro, ...)`
+- `ContentView.setupMicBinding`: amplitude 0–1 → `apply(.mic, ...)`
+- Vasemman laidan säädin: touch-alue **70 → 110pt** levennetty, `apply(.leftSlider, ...)`
+- UI: Input Settings -nappi (slider.horizontal.3) vasemmassa reunassa
+
+**Git:** commit `b2f580f`, pushed to origin/main
+**Muutetut tiedostot:** 10 tiedostoa, +546 -13 riviä, 3 uutta tiedostoa
+
