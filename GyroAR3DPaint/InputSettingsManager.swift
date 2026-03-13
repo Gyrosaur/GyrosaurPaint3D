@@ -29,6 +29,7 @@ enum InputChannel: String, CaseIterable {
 }
 
 // MARK: - InputSettingsManager
+@MainActor
 class InputSettingsManager: ObservableObject {
     // One mapping per input channel
     @Published var phoneGyroParam:   InputParameter = .none
@@ -38,10 +39,26 @@ class InputSettingsManager: ObservableObject {
 
     func param(for channel: InputChannel) -> Binding<InputParameter> {
         switch channel {
-        case .phoneGyro:   return Binding(get: { self.phoneGyroParam },   set: { self.phoneGyroParam   = $0 })
-        case .airPodsGyro: return Binding(get: { self.airPodsGyroParam }, set: { self.airPodsGyroParam = $0 })
-        case .mic:         return Binding(get: { self.micParam },         set: { self.micParam         = $0 })
-        case .leftSlider:  return Binding(get: { self.leftSliderParam },  set: { self.leftSliderParam  = $0 })
+        case .phoneGyro:
+            return Binding(
+                get: { [self] in self.phoneGyroParam },
+                set: { [self] v in self.phoneGyroParam = v }
+            )
+        case .airPodsGyro:
+            return Binding(
+                get: { [self] in self.airPodsGyroParam },
+                set: { [self] v in self.airPodsGyroParam = v }
+            )
+        case .mic:
+            return Binding(
+                get: { [self] in self.micParam },
+                set: { [self] v in self.micParam = v }
+            )
+        case .leftSlider:
+            return Binding(
+                get: { [self] in self.leftSliderParam },
+                set: { [self] v in self.leftSliderParam = v }
+            )
         }
     }
 
