@@ -1,6 +1,8 @@
 import UIKit
 import SwiftUI
 import RealityKit
+import ARKit
+import CoreVideo
 
 // MARK: - Camera Color Mode
 enum CameraColorMode: String, CaseIterable {
@@ -75,6 +77,79 @@ class CameraColorSampler {
         if kept.count < 4 {
             kept = raw.prefix(count).map { $0 }
         }
+
+        return kept.map { Color(hue: $0.h, saturation: $0.s, brightness: $0.b) }
+    }
+
+    // MARK: - ARFrame pixel buffer variant (no snapshot, no Metal conflict)
+
+    /// Sample colors directly from an ARFrame's captured image (YCbCr pixel buffer).
+    /// This is safe to call at any time without touching the Metal pipeline.
+    static func sample(from frame: ARFrame,
+                       center: CGPoint,
+                       radius: CGFloat,
+                       count: Int = 24) -> [Color] {
+
+        let pixelBuffer = frame.capturedImage  // kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+
+        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+
+        // Y plane gives brightness; we read interleaved CbCr plane for color.
+        guard let yBase   = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0),
+              let cbcrBase = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 1) else { return [] }
+
+        let yW    = CVPixelBufferGetWidthOfPlane(pixelBuffer, 0)
+        let yH    = CVPixelBufferGetHeightOfPlane(pixelBuffer, 0)
+        let yStride    = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
+        let cbcrStride = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 1)
+
+        let yBytes    = yBase.assumingMemoryBound(to: UInt8.self)
+        let cbcrBytes = cbcrBase.assumingMemoryBound(to: UInt8.self)
+
+        let fw = CGFloat(yW)
+        let fh = CGFloat(yH)
+        let cx = center.x * fw
+        let cy = center.y * fh
+        let rx = radius * fw
+        let ry = radius * fh
+
+        var raw: [(h: CGFloat, s: CGFloat, b: CGFloat)] = []
+        var attempts = 0
+        while raw.count < count * 3 && attempts < count * 20 {
+            attempts += 1
+            let angle = CGFloat.random(in: 0..<2 * .pi)
+            let dist  = sqrt(CGFloat.random(in: 0...1))
+            let px = Int(cx + rx * dist * cos(angle))
+            let py = Int(cy + ry * dist * sin(angle))
+            guard px >= 0, px < yW, py >= 0, py < yH else { continue }
+
+            // YCbCr → RGB (BT.601 full range)
+            let yVal  = CGFloat(yBytes[py * yStride + px]) / 255.0
+            let cbIdx = (py / 2) * cbcrStride + (px / 2) * 2
+            let cb    = CGFloat(cbcrBytes[cbIdx])     - 128.0
+            let cr    = CGFloat(cbcrBytes[cbIdx + 1]) - 128.0
+
+            let r = max(0, min(1, yVal + 1.402  * cr / 255.0))
+            let g = max(0, min(1, yVal - 0.344136 * cb / 255.0 - 0.714136 * cr / 255.0))
+            let b = max(0, min(1, yVal + 1.772  * cb / 255.0))
+
+            var hue: CGFloat = 0, sat: CGFloat = 0, bri: CGFloat = 0, a: CGFloat = 0
+            UIColor(red: r, green: g, blue: b, alpha: 1)
+                .getHue(&hue, saturation: &sat, brightness: &bri, alpha: &a)
+            guard bri > 0.15, sat > 0.05 else { continue }
+            raw.append((hue, sat, bri))
+        }
+
+        let minHueDist: CGFloat = 0.04
+        var kept: [(h: CGFloat, s: CGFloat, b: CGFloat)] = []
+        for candidate in raw {
+            if !kept.contains(where: { abs($0.h - candidate.h) < minHueDist }) {
+                kept.append(candidate)
+            }
+            if kept.count >= count { break }
+        }
+        if kept.count < 4 { kept = Array(raw.prefix(count)) }
 
         return kept.map { Color(hue: $0.h, saturation: $0.s, brightness: $0.b) }
     }

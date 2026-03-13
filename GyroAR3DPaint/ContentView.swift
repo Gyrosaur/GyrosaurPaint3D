@@ -555,29 +555,24 @@ struct ContentView: View {
 
     func sampleCameraColors(at point: CGPoint, in size: CGSize) {
         guard let arView = arViewRef, !isSamplingColors else { return }
+        guard let frame = arView.session.currentFrame else { return }
         isSamplingColors = true
 
-        // Defer snapshot by one runloop tick so AR render pipeline finishes current frame first.
-        // Calling snapshot() mid-frame causes MTLTextureUsageShaderRead assertion failures.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            arView.snapshot(saveToHDR: false) { [self] image in
-                defer { DispatchQueue.main.async { self.isSamplingColors = false } }
-                guard let image = image else { return }
-                Task { @MainActor in
-                    let normalized = CGPoint(x: point.x / size.width,
-                                            y: point.y / size.height)
-                    let radius: CGFloat = 0.06
-                    let palette = CameraColorSampler.sample(
-                        from: image,
-                        center: normalized,
-                        radius: radius,
-                        count: 24
-                    )
-                    self.drawingEngine.cameraColorPalette = palette.isEmpty
-                        ? self.drawingEngine.availableColors
-                        : palette
-                }
-            }
+        // Use ARFrame pixel buffer directly — avoids ARView.snapshot() which
+        // causes MTLTextureUsageShaderRead assertion failures mid Metal render.
+        Task { @MainActor in
+            defer { isSamplingColors = false }
+            let normalized = CGPoint(x: point.x / size.width,
+                                    y: point.y / size.height)
+            let palette = CameraColorSampler.sample(
+                from: frame,
+                center: normalized,
+                radius: 0.06,
+                count: 24
+            )
+            drawingEngine.cameraColorPalette = palette.isEmpty
+                ? drawingEngine.availableColors
+                : palette
         }
     }
 
