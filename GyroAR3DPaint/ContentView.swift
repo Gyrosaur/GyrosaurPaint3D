@@ -22,6 +22,7 @@ struct ContentView: View {
     @StateObject var brushPresetManager = BrushPresetManager()
     @StateObject var midiManager = MIDINetworkManager.shared
     @StateObject var micManager = MicInputManager()
+    @StateObject var inputSettingsManager = InputSettingsManager()
     
     @State private var showBrushPicker = false
     @State private var showBrushStudio = false
@@ -63,6 +64,10 @@ struct ContentView: View {
     @State private var showColorWheel = false
     @State private var colorWheelHue: CGFloat = 0
     @State private var colorWheelSaturation: CGFloat = 1
+    // Camera color picker
+    @State private var showCameraColorPicker = false
+    @State private var cameraPickerCirclePos: CGPoint = .zero
+    @State private var showInputSettings = false
     private let cameraAspectRatio: CGFloat = 9.0 / 16.0
     private let minToolbarMargin: CGFloat = 120
     
@@ -231,9 +236,11 @@ struct ContentView: View {
     }
     
     func setupAirPodsBinding() {
-        // Sync AirPods gradient value to drawing engine
         airPodsManager.$colorGradientValue.sink { [self] value in
             drawingEngine.airPodsGradientValue = value
+            // Route AirPods gyro to mapped parameter (0–1 from -1…1)
+            let normalized = Float((value + 1.0) / 2.0)
+            inputSettingsManager.apply(channel: .airPodsGyro, value: normalized, to: drawingEngine)
         }.store(in: &controllerCancellables)
     }
 
@@ -243,9 +250,11 @@ struct ContentView: View {
             drawingEngine.micGateActive = gate
         }.store(in: &controllerCancellables)
 
-        // Amplitude → brush size scale (0 = min, 1 = max)
+        // Amplitude → brush size scale (0 = min, 1 = max) AND input settings routing
         micManager.$amplitude.sink { [self] amp in
             drawingEngine.micBrushScale = amp
+            // Route mic amplitude to user-mapped parameter
+            inputSettingsManager.apply(channel: .mic, value: amp, to: drawingEngine)
         }.store(in: &controllerCancellables)
 
         // Spectral centroid → hue shift
@@ -435,8 +444,57 @@ struct ContentView: View {
         }
     }
 
-    private var inputSourceColor: Color {
-        switch drawingEngine.inputSource {
+    // Camera color button: toggles picker mode + cycles color mode on long press
+    var cameraColorButton: some View {
+        Button(action: {
+            showCameraColorPicker.toggle()
+            drawingEngine.cameraColorEnabled = showCameraColorPicker
+            if !showCameraColorPicker {
+                cameraPickerCirclePos = .zero
+            }
+        }) {
+            ZStack {
+                Circle()
+                    .fill(LinearGradient(
+                        colors: drawingEngine.cameraColorEnabled
+                            ? [Color.orange.opacity(0.5), Color.yellow.opacity(0.3), Color.black.opacity(0.4)]
+                            : [Color.white.opacity(0.2), Color.gray.opacity(0.4), Color.black.opacity(0.5)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 32, height: 32)
+                Image(systemName: "camera.aperture")
+                    .font(.system(size: 14))
+                    .foregroundColor(drawingEngine.cameraColorEnabled ? .orange : .white)
+                // Mode badge
+                if drawingEngine.cameraColorEnabled {
+                    Text(cameraModeBadge)
+                        .font(.system(size: 6, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(2)
+                        .background(Color.orange.opacity(0.8))
+                        .cornerRadius(3)
+                        .offset(x: 10, y: 10)
+                }
+            }
+        }
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.4).onEnded { _ in
+                let modes = CameraColorMode.allCases
+                if let idx = modes.firstIndex(of: drawingEngine.cameraColorMode) {
+                    drawingEngine.cameraColorMode = modes[(idx + 1) % modes.count]
+                }
+            }
+        )
+    }
+
+    private var cameraModeBadge: String {
+        switch drawingEngine.cameraColorMode {
+        case .sequence: return "SEQ"
+        case .random:   return "RND"
+        case .driven:   return "DRV"
+        }
+    }
+
+    private var inputSourceColor: Color {        switch drawingEngine.inputSource {
         case .gyro: return .white
         case .mic:  return .green
         case .both: return .cyan
@@ -451,6 +509,67 @@ struct ContentView: View {
         case .both: colors = [Color.cyan.opacity(0.3), Color.cyan.opacity(0.15), Color.black.opacity(0.5)]
         }
         return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+
+    // MARK: - Camera Color Picker Overlay
+    var cameraPickerOverlay: some View {
+        GeometryReader { geo in
+            ZStack {
+                // Fullscreen tap area to place the circle
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { location in
+                        cameraPickerCirclePos = location
+                        sampleCameraColors(at: location, in: geo.size)
+                    }
+
+                // Circle indicator at selected position
+                if cameraPickerCirclePos != .zero {
+                    ZStack {
+                        Circle()
+                            .stroke(Color.white, lineWidth: 2)
+                            .frame(width: 80, height: 80)
+                        Circle()
+                            .stroke(Color.black.opacity(0.4), lineWidth: 1)
+                            .frame(width: 82, height: 82)
+                        // Mini palette preview
+                        HStack(spacing: 2) {
+                            ForEach(drawingEngine.cameraColorPalette.prefix(6), id: \.self) { c in
+                                Circle().fill(c).frame(width: 8, height: 8)
+                            }
+                        }
+                        .offset(y: 48)
+                        Text("CAM")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                            .offset(y: -44)
+                    }
+                    .position(cameraPickerCirclePos)
+                    .allowsHitTesting(false)
+                }
+            }
+        }
+    }
+
+    func sampleCameraColors(at point: CGPoint, in size: CGSize) {
+        guard let arView = arViewRef else { return }
+        arView.snapshot(saveToHDR: false) { image in
+            guard let image = image else { return }
+            Task { @MainActor in
+                let normalized = CGPoint(x: point.x / size.width,
+                                        y: point.y / size.height)
+                let radius: CGFloat = 0.06  // ~6% of screen width
+                let palette = CameraColorSampler.sample(
+                    from: image,
+                    center: normalized,
+                    radius: radius,
+                    count: 24
+                )
+                drawingEngine.cameraColorPalette = palette.isEmpty
+                    ? drawingEngine.availableColors  // fallback
+                    : palette
+            }
+        }
     }
 
     private func cameraLayout(in size: CGSize) -> (cameraSize: CGSize, verticalMargin: CGFloat) {
@@ -523,12 +642,12 @@ struct ContentView: View {
                     : drawingEngine.drawingDistanceOffset
                 
                 ZStack(alignment: .leading) {
-                    // Touch area
+                    // Touch area — levennetty 110pt (oli 70pt)
                     Rectangle()
                         .fill(Color.clear)
-                        .frame(width: 70, height: sliderHeight)
+                        .frame(width: 110, height: sliderHeight)
                         .contentShape(Rectangle())
-                        .position(x: 35, y: topOffset + sliderHeight / 2)
+                        .position(x: 55, y: topOffset + sliderHeight / 2)
                         .gesture(
                             DragGesture(minimumDistance: 0)
                                 .onChanged { value in
@@ -539,6 +658,8 @@ struct ContentView: View {
                                     } else {
                                         drawingEngine.drawingDistanceOffset = newValue
                                     }
+                                    // Route left slider to mapped parameter
+                                    inputSettingsManager.apply(channel: .leftSlider, value: newValue, to: drawingEngine)
                                 }
                         )
                     
@@ -679,6 +800,7 @@ struct ContentView: View {
             selectionManager: selectionManager,
             straightLineState: straightLineState,
             cameraSettings: cameraSettings,
+            inputSettingsManager: inputSettingsManager,
             drawingMode: $drawingMode,
             arViewRef: $arViewRef
         )
@@ -712,6 +834,11 @@ struct ContentView: View {
             // Left edge opacity slider - always available during drawing
             if !hideUI {
                 leftEdgeOpacitySlider
+            }
+
+            // Camera color picker: tap anywhere to place the sample circle
+            if showCameraColorPicker && !hideUI {
+                cameraPickerOverlay
             }
         }
     }
@@ -807,6 +934,21 @@ struct ContentView: View {
 
                 // Input source selector (Gyro / Mic / Both)
                 inputSourceButton
+
+                // Camera color palette picker
+                cameraColorButton
+
+                // Input settings
+                Button(action: { showInputSettings = true }) {
+                    ZStack {
+                        Circle()
+                            .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.gray.opacity(0.4), Color.black.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .frame(width: 32, height: 32)
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.system(size: 14))
+                            .foregroundColor(.white)
+                    }
+                }
                 
                 // MIDI Status & Toggle
                 Button(action: { showMIDISettings = true }) {
@@ -1087,6 +1229,7 @@ struct ContentView: View {
             if showImageSelector { imageSelectorModal }
             if showPerformanceSettings { performanceSettingsModal }
             if showMIDISettings { midiSettingsModal }
+            if showInputSettings { inputSettingsModal }
         }
     }
     
@@ -1117,7 +1260,19 @@ struct ContentView: View {
         ZStack {
             Color.black.opacity(0.5).ignoresSafeArea()
                 .onTapGesture { showMIDISettings = false }
-            MIDISettingsView(midiManager: midiManager)
+            MIDISettingsView(midiManager: midiManager, onDismiss: { showMIDISettings = false })
+        }
+    }
+
+    var inputSettingsModal: some View {
+        ZStack {
+            Color.black.opacity(0.5).ignoresSafeArea()
+                .onTapGesture { showInputSettings = false }
+            InputSettingsView(
+                manager: inputSettingsManager,
+                drawingEngine: drawingEngine,
+                onDismiss: { showInputSettings = false }
+            )
         }
     }
     

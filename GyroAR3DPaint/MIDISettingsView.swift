@@ -2,7 +2,13 @@ import SwiftUI
 
 struct MIDISettingsView: View {
     @ObservedObject var midiManager: MIDINetworkManager
+    var onDismiss: (() -> Void)? = nil
     @Environment(\.dismiss) var dismiss
+
+    private func closeSelf() {
+        onDismiss?()
+        dismiss()
+    }
     
     var body: some View {
         NavigationView {
@@ -81,7 +87,7 @@ struct MIDISettingsView: View {
                             }
                         }
                     }
-                    
+
                     Button {
                         testMIDI()
                     } label: {
@@ -120,7 +126,7 @@ struct MIDISettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
-                        dismiss()
+                        closeSelf()
                     }
                 }
             }

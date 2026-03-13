@@ -121,7 +121,34 @@ class DrawingEngine: ObservableObject {
 
     // MARK: - Mic Input
     @Published var inputSource: DrawingInputSource = .gyro
-    /// Gate: true = draw, false = stop. Driven by MicInputManager.gateOpen.
+
+    // MARK: - Camera Color Palette
+    @Published var cameraColorEnabled: Bool = false
+    @Published var cameraColorMode: CameraColorMode = .random
+    @Published var cameraColorPalette: [Color] = []
+    /// Driven mode: 0–1 index into palette (set from mic amplitude or gyro tilt)
+    @Published var cameraColorDrivenIndex: Float = 0.0
+    private var sequenceStrokeIndex: Int = 0
+
+    /// Pick the next color from the camera palette based on current mode.
+    /// Call once per new stroke (sequence/driven) or once per point (random).
+    func nextCameraColor(pointIndex: Int = 0) -> Color? {
+        guard cameraColorEnabled, !cameraColorPalette.isEmpty else { return nil }
+        switch cameraColorMode {
+        case .sequence:
+            let idx = sequenceStrokeIndex % cameraColorPalette.count
+            return cameraColorPalette[idx]
+        case .random:
+            return cameraColorPalette[Int.random(in: 0..<cameraColorPalette.count)]
+        case .driven:
+            let idx = Int(cameraColorDrivenIndex * Float(cameraColorPalette.count - 1))
+            return cameraColorPalette[max(0, min(cameraColorPalette.count - 1, idx))]
+        }
+    }
+
+    func advanceCameraColorSequence() {
+        sequenceStrokeIndex += 1
+    }    /// Gate: true = draw, false = stop. Driven by MicInputManager.gateOpen.
     @Published var micGateActive: Bool = false
     /// Amplitude 0–1 → brush size multiplier. 0 = brushSizeMin, 1 = brushSizeMax.
     @Published var micBrushScale: Float = 0.0
@@ -279,8 +306,13 @@ class DrawingEngine: ObservableObject {
             finalBrushSize = max(0.001, finalBrushSize) // Ensure positive
         }
         
-        // Lock current color to this point - always set it
-        let pointColor = currentColor
+        // Lock current color to this point — camera palette overrides if enabled
+        let pointColor: Color
+        if cameraColorEnabled && !cameraColorPalette.isEmpty {
+            pointColor = nextCameraColor() ?? currentColor
+        } else {
+            pointColor = currentColor
+        }
         let point = StrokePoint(
             position: finalPos,
             brushSize: finalBrushSize,

@@ -30,6 +30,9 @@
 		BRUSH008 /* BrushScriptEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = BRUSH018 /* BrushScriptEngine.swift */; };
 		MIDI0001 /* MIDINetworkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = MIDI0011 /* MIDINetworkManager.swift */; };
 		MIC00001 /* MicInputManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = MIC00011 /* MicInputManager.swift */; };
+		CAM00001 /* CameraColorSampler.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAM00011 /* CameraColorSampler.swift */; };
+		INS00001 /* InputSettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = INS00011 /* InputSettingsManager.swift */; };
+		INV00001 /* InputSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = INV00011 /* InputSettingsView.swift */; };
 		MIDI0002 /* MIDISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = MIDI0012 /* MIDISettingsView.swift */; };
 		CE226C272F0C48EE00DFF2BF /* AirPodsMotionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE226C262F0C48EE00DFF2BF /* AirPodsMotionManager.swift */; };
 		CE732B9E2F1169AA006E08AA /* Gyro3DColorButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE732B9D2F1169AA006E08AA /* Gyro3DColorButton.swift */; };
@@ -62,6 +65,9 @@
 		BRUSH018 /* BrushScriptEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushScriptEngine.swift; sourceTree = "<group>"; };
 		MIDI0011 /* MIDINetworkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MIDINetworkManager.swift; sourceTree = "<group>"; };
 		MIC00011 /* MicInputManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicInputManager.swift; sourceTree = "<group>"; };
+		CAM00011 /* CameraColorSampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraColorSampler.swift; sourceTree = "<group>"; };
+		INS00011 /* InputSettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSettingsManager.swift; sourceTree = "<group>"; };
+		INV00011 /* InputSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSettingsView.swift; sourceTree = "<group>"; };
 		MIDI0012 /* MIDISettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MIDISettingsView.swift; sourceTree = "<group>"; };
 		CE226C262F0C48EE00DFF2BF /* AirPodsMotionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirPodsMotionManager.swift; sourceTree = "<group>"; };
 		CE732B9D2F1169AA006E08AA /* Gyro3DColorButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gyro3DColorButton.swift; sourceTree = "<group>"; };
@@ -100,6 +106,9 @@
 				CE226C262F0C48EE00DFF2BF /* AirPodsMotionManager.swift */,
 				MIDI0011 /* MIDINetworkManager.swift */,
 				MIC00011 /* MicInputManager.swift */,
+				CAM00011 /* CameraColorSampler.swift */,
+				INS00011 /* InputSettingsManager.swift */,
+				INV00011 /* InputSettingsView.swift */,
 				MIDI0012 /* MIDISettingsView.swift */,
 				AAA00015 /* StrokeRenderer.swift */,
 				AAA00019 /* VirtualGalleryBuilder.swift */,
@@ -210,6 +219,9 @@
 				CE732B9E2F1169AA006E08AA /* Gyro3DColorButton.swift in Sources */,
 				CE226C272F0C48EE00DFF2BF /* AirPodsMotionManager.swift in Sources */,
 				MIC00001 /* MicInputManager.swift in Sources */,
+				CAM00001 /* CameraColorSampler.swift in Sources */,
+				INS00001 /* InputSettingsManager.swift in Sources */,
+				INV00001 /* InputSettingsView.swift in Sources */,
 				AAA00001 /* GyroAR3DPaintApp.swift in Sources */,
 				AAA00007 /* ModeSelectionView.swift in Sources */,
 				AAA00002 /* ContentView.swift in Sources */,

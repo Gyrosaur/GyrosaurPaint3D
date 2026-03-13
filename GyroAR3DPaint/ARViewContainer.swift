@@ -52,6 +52,7 @@ struct ARViewContainer: UIViewRepresentable {
         var selectionManager: StrokeSelectionManager?
         var straightLineState: StraightLineState?
         var drawingMode: DrawingMode = .freehand
+        var inputSettingsManager: InputSettingsManager?
         
         private var displayLink: CADisplayLink?
         private var strokeRenderer: StrokeRenderer?
@@ -131,6 +132,15 @@ struct ARViewContainer: UIViewRepresentable {
             
             // Handle controller drawing (LT/RT triggers)
             handleControllerDrawing(at: brushPosition)
+
+            // Input Settings routing: phone gyro → mapped parameter
+            if let ism = inputSettingsManager {
+                // Derive a 0–1 value from camera yaw rotation rate
+                // camera.eulerAngles.y gives heading; we use delta for rotation speed
+                let yaw = frame.camera.eulerAngles.y          // radians, wraps ±π
+                let normalizedGyro = Float((yaw + .pi) / (2 * .pi))  // 0–1
+                ism.apply(channel: .phoneGyro, value: normalizedGyro, to: drawingEngine)
+            }
             
             // Mic gate + dynamics: amplitude → brush size, pitch → hue shift
             let micMode = drawingEngine.inputSource
@@ -529,6 +539,7 @@ struct ARViewContainerWithRef: UIViewRepresentable {
     @ObservedObject var selectionManager: StrokeSelectionManager
     @ObservedObject var straightLineState: StraightLineState
     @ObservedObject var cameraSettings: CameraSettings
+    @ObservedObject var inputSettingsManager: InputSettingsManager
     @Binding var drawingMode: DrawingMode
     @Binding var arViewRef: ARView?
     
@@ -543,6 +554,7 @@ struct ARViewContainerWithRef: UIViewRepresentable {
         context.coordinator.controllerManager = controllerManager
         context.coordinator.selectionManager = selectionManager
         context.coordinator.straightLineState = straightLineState
+        context.coordinator.inputSettingsManager = inputSettingsManager
         context.coordinator.startFrameUpdates()
         context.coordinator.applyGraphicsSettings(to: arView)
         

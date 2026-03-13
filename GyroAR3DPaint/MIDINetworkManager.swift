@@ -83,7 +83,9 @@ class MIDINetworkManager: ObservableObject {
             }
             session.isEnabled = false
         }
+        networkSession = nil
         isConnected = false
+        isMIDIEnabled = false
         statusMessage = "Disconnected"
         print("🔌 MIDI Network disconnected")
     }

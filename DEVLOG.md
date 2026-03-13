@@ -860,3 +860,96 @@ GPT:n ehdotuksen pohjalta mic-logiikka muutettiin:
 - Commit: `c928844`
 - Branch: main, up to date with origin/main
 
+
+---
+
+## 2025-03-13 – Session 10: Kolme isoa ominaisuutta + MIDI-bugikorjaus
+
+### SUUNNITELMA (kirjattu ennen toteutusta)
+
+---
+
+### 10a: MIDI send -tilan bugikorjaus ✳️ PRIORITEETTI
+
+**Ongelma:** Kun MIDI settings -näkymä avataan ja ollaan connected-tilassa,
+tilasta ei pääse pois ilman sovelluksen uudelleenkäynnistystä.
+
+**Juuri:** MIDISettingsView käyttää NavigationView + `dismiss()` mutta se on
+renderöity ZStack-modalina ilman .sheet — dismiss() ei toimi oikein.
+Lisäksi `disconnect()` saattaa jättää `isConnected = true` jos session
+cleanup epäonnistuu.
+
+**Korjaus:**
+- MIDISettingsView: lisätään eksplisiittinen `onDismiss`-callback parametriksi
+- ContentView: midiSettingsModal käyttää onDismiss-callbackia showMIDISettings = false
+- MIDINetworkManager.disconnect(): varmistetaan että isConnected = false aina
+
+---
+
+### 10b: Kameran väripaletti reaaliajassa
+
+**Idea:** Nappi aktivoi "camera color picker" -tilan. Käyttäjä napauttaa
+ruutua → ilmestyy circle-indikaattori valitulle alueelle. Siitä alueesta
+otetaan N pikseliä (esim. 24 kpl) → `cameraColorPalette: [Color]`.
+
+**Kolme värimoodi-vaihtoehtoa** (valittavissa settings-paneelista tai pienestä
+toggle-napista):
+- **Sekvenssi**: värit kiertävät paletissa stroke-kohtaisesti
+- **Satunnainen**: jokainen piirtopiste saa satunnaisen värin paletista
+- **Ohjattu** (mic/gyro): amplitude/kallistus indeksoi palettia
+
+**Toteutus:**
+- `CameraColorSampler.swift`: ARView frame → UIImage-snapshot → pikselien näytteistys
+  Otetaan N pistettä ympyrän sisältä (satunnaisesti tai ruudukolla), HSB-hajautetaan
+  (poistetaan liian samanlaiset värit) → palautetaan `[Color]`
+- `DrawingEngine`: `cameraColorPalette`, `cameraColorMode: CameraColorMode` (.sequence / .random / .driven)
+  `cameraColorEnabled: Bool`, `cameraColorPickerActive: Bool`
+- `ContentView`: picker-nappi toolbarissa, tap gesture ruudulle kun picker active,
+  circle overlay osoittamaan valittua aluetta
+- `ARViewContainer`: per-piste väri: jos `cameraColorEnabled`, käytetään palettia
+
+**Ei tarvita omaa piirtotilaa** — toimii normaalissa freehand-moodissa.
+
+---
+
+### 10c: Input Settings -paneeli
+
+**Nappi** vasemmassa reunassa (tai toolbar) avaa paneelin jossa
+kullekin inputille valitaan **yksi** vaikutus.
+
+**Inputit:**
+- Puhelimen gyro (rotaationopeus)
+- AirPods gyro (pään kallistus, -1…1)
+- Mikrofoni amplitude
+- Vasemman laidan säädin (levennetty kosketusalue)
+
+**Vaikutukset per input (valitaan yksi):**
+- Brush size
+- Opacity
+- Hue shift
+- Drawing distance
+- Color palette index (jos camera color on päällä)
+- (ei mitään)
+
+**Toteutus:**
+- `InputSettingsManager.swift`: ObservableObject, tallentaa mappaukset
+- `InputSettingsView.swift`: Picker per input
+- ContentView + ARViewContainer: lukevat mappaukset ja reitittävät arvot oikeisiin parametreihin
+
+**Vasemman laidan säädin:** levennetään touch-alue ~70pt → 100pt leveäksi
+
+---
+
+### Tiedostot joihin tehdään muutoksia:
+- `MIDISettingsView.swift` – onDismiss callback
+- `MIDINetworkManager.swift` – disconnect() varmistus
+- `ContentView.swift` – modal korjaus, uudet napit ja bindingit
+- `CameraColorSampler.swift` – uusi
+- `DrawingEngine.swift` – camera palette + input mappings
+- `ARViewContainer.swift` – värilogiikka + input mappings
+- `InputSettingsManager.swift` – uusi
+- `InputSettingsView.swift` – uusi
+- `project.pbxproj` – uudet tiedostot
+
+### Status: [ ] 10a [ ] 10b [ ] 10c
+
