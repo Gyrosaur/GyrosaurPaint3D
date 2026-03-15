@@ -28,15 +28,20 @@
 		BRUSH006 /* BrushTestCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = BRUSH016 /* BrushTestCanvas.swift */; };
 		BRUSH007 /* BrushDSLParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = BRUSH017 /* BrushDSLParser.swift */; };
 		BRUSH008 /* BrushScriptEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = BRUSH018 /* BrushScriptEngine.swift */; };
-		MIDI0001 /* MIDINetworkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = MIDI0011 /* MIDINetworkManager.swift */; };
-		MIC00001 /* MicInputManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = MIC00011 /* MicInputManager.swift */; };
 		CAM00001 /* CameraColorSampler.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAM00011 /* CameraColorSampler.swift */; };
-		INS00001 /* InputSettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = INS00011 /* InputSettingsManager.swift */; };
-		INV00001 /* InputSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = INV00011 /* InputSettingsView.swift */; };
-		MIDI0002 /* MIDISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = MIDI0012 /* MIDISettingsView.swift */; };
 		CE226C272F0C48EE00DFF2BF /* AirPodsMotionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE226C262F0C48EE00DFF2BF /* AirPodsMotionManager.swift */; };
 		CE732B9E2F1169AA006E08AA /* Gyro3DColorButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE732B9D2F1169AA006E08AA /* Gyro3DColorButton.swift */; };
 		CE944E512F087B0400FB5510 /* AspectRatioAndGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE944E502F087B0400FB5510 /* AspectRatioAndGallery.swift */; };
+		INS00001 /* InputSettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = INS00011 /* InputSettingsManager.swift */; };
+		INV00001 /* InputSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = INV00011 /* InputSettingsView.swift */; };
+		MIC00001 /* MicInputManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = MIC00011 /* MicInputManager.swift */; };
+		MIDI0001 /* MIDINetworkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = MIDI0011 /* MIDINetworkManager.swift */; };
+		MIDI0002 /* MIDISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = MIDI0012 /* MIDISettingsView.swift */; };
+		STILL001 /* StillModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = STILL011 /* StillModeView.swift */; };
+		WATCH001 /* WatchMotionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = WATCH011 /* WatchMotionManager.swift */; };
+		FACE0001 /* FaceInputManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0011 /* FaceInputManager.swift */; };
+		MREC0001 /* MotionRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = MREC0011 /* MotionRecorder.swift */; };
+		WCF00001 /* WatchConnectivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = WCF00011 /* WatchConnectivity.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -63,15 +68,20 @@
 		BRUSH016 /* BrushTestCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushTestCanvas.swift; sourceTree = "<group>"; };
 		BRUSH017 /* BrushDSLParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushDSLParser.swift; sourceTree = "<group>"; };
 		BRUSH018 /* BrushScriptEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushScriptEngine.swift; sourceTree = "<group>"; };
-		MIDI0011 /* MIDINetworkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MIDINetworkManager.swift; sourceTree = "<group>"; };
-		MIC00011 /* MicInputManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicInputManager.swift; sourceTree = "<group>"; };
 		CAM00011 /* CameraColorSampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraColorSampler.swift; sourceTree = "<group>"; };
-		INS00011 /* InputSettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSettingsManager.swift; sourceTree = "<group>"; };
-		INV00011 /* InputSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSettingsView.swift; sourceTree = "<group>"; };
-		MIDI0012 /* MIDISettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MIDISettingsView.swift; sourceTree = "<group>"; };
 		CE226C262F0C48EE00DFF2BF /* AirPodsMotionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirPodsMotionManager.swift; sourceTree = "<group>"; };
 		CE732B9D2F1169AA006E08AA /* Gyro3DColorButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gyro3DColorButton.swift; sourceTree = "<group>"; };
 		CE944E502F087B0400FB5510 /* AspectRatioAndGallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AspectRatioAndGallery.swift; sourceTree = "<group>"; };
+		INS00011 /* InputSettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSettingsManager.swift; sourceTree = "<group>"; };
+		INV00011 /* InputSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSettingsView.swift; sourceTree = "<group>"; };
+		MIC00011 /* MicInputManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicInputManager.swift; sourceTree = "<group>"; };
+		MIDI0011 /* MIDINetworkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MIDINetworkManager.swift; sourceTree = "<group>"; };
+		MIDI0012 /* MIDISettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MIDISettingsView.swift; sourceTree = "<group>"; };
+		STILL011 /* StillModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StillModeView.swift; sourceTree = "<group>"; };
+		WATCH011 /* WatchMotionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMotionManager.swift; sourceTree = "<group>"; };
+		FACE0011 /* FaceInputManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceInputManager.swift; sourceTree = "<group>"; };
+		MREC0011 /* MotionRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionRecorder.swift; sourceTree = "<group>"; };
+		WCF00011 /* WatchConnectivity.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WatchConnectivity.framework; path = System/Library/Frameworks/WatchConnectivity.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -79,6 +89,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				WCF00001 /* WatchConnectivity.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -90,7 +101,16 @@
 			children = (
 				AAA00031 /* GyroAR3DPaint */,
 				AAA00032 /* Products */,
+				AAA00033 /* Frameworks */,
 			);
+			sourceTree = "<group>";
+		};
+		AAA00033 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				WCF00011 /* WatchConnectivity.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		AAA00031 /* GyroAR3DPaint */ = {
@@ -120,6 +140,10 @@
 				AAA00016 /* Assets.xcassets */,
 				AAA00017 /* Info.plist */,
 				CE944E502F087B0400FB5510 /* AspectRatioAndGallery.swift */,
+				STILL011 /* StillModeView.swift */,
+				WATCH011 /* WatchMotionManager.swift */,
+				FACE0011 /* FaceInputManager.swift */,
+				MREC0011 /* MotionRecorder.swift */,
 			);
 			path = GyroAR3DPaint;
 			sourceTree = "<group>";
@@ -182,7 +206,7 @@
 					};
 				};
 			};
-			buildConfigurationList = AAA00060 /* Build configuration list for PBXProject "GyroAR3DPaint_cpu" */;
+			buildConfigurationList = AAA00060 /* Build configuration list for PBXProject "GyrosaurPaint3D_ap" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -245,6 +269,10 @@
 				BRUSH008 /* BrushScriptEngine.swift in Sources */,
 				MIDI0001 /* MIDINetworkManager.swift in Sources */,
 				MIDI0002 /* MIDISettingsView.swift in Sources */,
+				STILL001 /* StillModeView.swift in Sources */,
+				WATCH001 /* WatchMotionManager.swift in Sources */,
+				FACE0001 /* FaceInputManager.swift in Sources */,
+				MREC0001 /* MotionRecorder.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -262,7 +290,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = GyroAR3DPaint/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Gyro AR Paint";
+				INFOPLIST_KEY_CFBundleDisplayName = "Gyro AR Paint ap";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.graphics-design";
 				INFOPLIST_KEY_NSCameraUsageDescription = "AR painting requires camera access to track your position in space";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -299,7 +327,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = GyroAR3DPaint/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Gyro AR Paint";
+				INFOPLIST_KEY_CFBundleDisplayName = "Gyro AR Paint ap";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.graphics-design";
 				INFOPLIST_KEY_NSCameraUsageDescription = "AR painting requires camera access to track your position in space";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -456,7 +484,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		AAA00060 /* Build configuration list for PBXProject "GyroAR3DPaint_cpu" */ = {
+		AAA00060 /* Build configuration list for PBXProject "GyrosaurPaint3D_ap" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				AAA00061 /* Debug */,

@@ -33,9 +33,23 @@ class GameControllerManager: ObservableObject {
     @Published var buttonY = false
     @Published var leftBumper = false
     @Published var rightBumper = false
-    @Published var menuButton = false  // Xbox menu button
+    @Published var menuButton = false  // Xbox menu button (three lines, right)
     @Published var leftStickButton = false  // L3 - stick pressed
     @Published var rightStickButton = false  // R3 - stick pressed
+    @Published var optionsButton = false    // View/Options button (left of centre)
+
+    // Still Mode draw gate
+    // Käyttää MOLEMPIA LT ja RT — kumpi tahansa toimii
+    // toggle-moodi: lyhyt paina = on/off
+    // hold-moodi: pitkä paina = piirto kun pohjassa, irrotus = piirto loppuu
+    @Published var stillDrawGateActive = false
+    @Published var stillDrawHoldMode   = false
+    // Seuraa triggerien rising/falling edge erikseen
+    private var ltWasPressed = false
+    private var rtWasPressed = false
+    private var ltPressStart: Date? = nil
+    private var rtPressStart: Date? = nil
+    private let longPressDuration: TimeInterval = 0.6
     
     // Drawing control
     @Published var isControllerDrawing = false  // LT or RT pressed = draw
@@ -83,6 +97,36 @@ class GameControllerManager: ObservableObject {
         }
     }
     
+    // Yhteinen logiikka molemmille triggereille
+    private func handleTriggerGate(pressStart: inout Date?, wasPressed: inout Bool, isNowPressed: Bool) {
+        if isNowPressed && !wasPressed {
+            // Rising edge — paina alas
+            pressStart = Date()
+            if stillDrawHoldMode {
+                stillDrawGateActive = true
+            }
+        } else if !isNowPressed && wasPressed {
+            // Falling edge — irrotus
+            let held = pressStart.map { Date().timeIntervalSince($0) } ?? 0
+            pressStart = nil
+            if held >= longPressDuration {
+                // Pitkä painallus: siirry hold-moodiin, gate kiinni irrotuksessa
+                stillDrawHoldMode   = true
+                stillDrawGateActive = false
+            } else {
+                if stillDrawHoldMode {
+                    // Hold-moodissa lyhyt painallus: poistu hold-moodista
+                    stillDrawHoldMode   = false
+                    stillDrawGateActive = false
+                } else {
+                    // Normaali toggle
+                    stillDrawGateActive.toggle()
+                }
+            }
+        }
+        wasPressed = isNowPressed
+    }
+
     private var controller: GCController?
     
     init() {
@@ -159,17 +203,34 @@ class GameControllerManager: ObservableObject {
         // Triggers - now control drawing on/off
         gamepad.leftTrigger.valueChangedHandler = { [weak self] _, value, _ in
             Task { @MainActor in
-                self?.leftTrigger = value
-                // LT or RT > 0.1 = drawing active
-                self?.isControllerDrawing = value > 0.1 || (self?.rightTrigger ?? 0) > 0.1
+                guard let self else { return }
+                self.leftTrigger = value
+                self.isControllerDrawing = value > 0.1 || self.rightTrigger > 0.1
+                // LT = HOLD ONLY — piirto päällä kun pohjassa, ei toggle-logiikkaa
+                let pressed = value > 0.3
+                if pressed != self.ltWasPressed {
+                    self.ltWasPressed = pressed
+                    if pressed {
+                        self.stillDrawGateActive = true
+                    } else {
+                        // Irrotus lopettaa aina piirron LT:llä
+                        // Poistu myös hold-modesta jos se oli LT:n aktivoima
+                        self.stillDrawGateActive = false
+                    }
+                }
             }
         }
-        
+
         gamepad.rightTrigger.valueChangedHandler = { [weak self] _, value, _ in
             Task { @MainActor in
-                self?.rightTrigger = value
-                // LT or RT > 0.1 = drawing active
-                self?.isControllerDrawing = (self?.leftTrigger ?? 0) > 0.1 || value > 0.1
+                guard let self else { return }
+                self.rightTrigger = value
+                self.isControllerDrawing = self.leftTrigger > 0.1 || value > 0.1
+                // Still Mode gate — rising/falling edge
+                let pressed = value > 0.3
+                self.handleTriggerGate(pressStart: &self.rtPressStart,
+                                       wasPressed: &self.rtWasPressed,
+                                       isNowPressed: pressed)
             }
         }
         
@@ -234,10 +295,16 @@ class GameControllerManager: ObservableObject {
             }
         }
         
-        // Menu button (Xbox button with three lines)
+        // Menu button (Xbox button with three lines, right side)
         gamepad.buttonMenu.valueChangedHandler = { [weak self] _, _, pressed in
             Task { @MainActor in
                 self?.menuButton = pressed
+            }
+        }
+        // Still Mode gate on RT-triggerillä
+        gamepad.buttonOptions?.valueChangedHandler = { [weak self] _, _, pressed in
+            Task { @MainActor in
+                self?.optionsButton = pressed
             }
         }
     }

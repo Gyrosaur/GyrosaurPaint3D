@@ -29,6 +29,10 @@ struct GyroAR3DPaintApp: App {
                         onExit: { selectedMode = nil }
                     )
                     .environmentObject(performanceManager)
+                } else if selectedMode == .stillMode {
+                    // Still Mode — body sensors drive painting, no touch
+                    StillModeView(onExitToMenu: { selectedMode = nil })
+                        .environmentObject(performanceManager)
                 } else {
                     // AR Drawing mode (Real World)
                     ContentView(onExitToMenu: { selectedMode = nil })

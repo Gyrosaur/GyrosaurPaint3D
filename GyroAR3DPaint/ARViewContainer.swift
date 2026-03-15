@@ -135,11 +135,10 @@ struct ARViewContainer: UIViewRepresentable {
 
             // Input Settings routing: phone gyro → mapped parameter
             if let ism = inputSettingsManager {
-                // Derive a 0–1 value from camera yaw rotation rate
-                // camera.eulerAngles.y gives heading; we use delta for rotation speed
-                let yaw = frame.camera.eulerAngles.y          // radians, wraps ±π
-                let normalizedGyro = Float((yaw + .pi) / (2 * .pi))  // 0–1
-                ism.apply(channel: .phoneGyro, value: normalizedGyro, to: drawingEngine)
+                let yaw = frame.camera.eulerAngles.y
+                let normalizedGyro = Float((yaw + .pi) / (2 * .pi))
+                ism.applyGyro(value: normalizedGyro, isAirPods: false, to: drawingEngine)
+                ism.applyAll(to: drawingEngine, controller: controllerManager)
             }
             
             // Mic gate + dynamics: amplitude → brush size, pitch → hue shift

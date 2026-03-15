@@ -346,6 +346,9 @@ class DrawingEngine: ObservableObject {
         generator.impactOccurred(intensity: min(1.0, CGFloat(size * 30)))
     }
     
+    /// Alias used by Still Mode and gesture-less controllers
+    func endDrawing() { _ = stopDrawing() }
+
     func stopDrawing() -> Stroke? {
         guard isDrawing, let stroke = currentStroke, stroke.points.count > 1 else {
             isDrawing = false; currentStroke = nil; return nil

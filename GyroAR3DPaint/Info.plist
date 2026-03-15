@@ -62,5 +62,7 @@
 	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Gyrosaur Paint uses your microphone to control brush opacity and drawing with sound amplitude.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Still Mode uses face tracking to detect mouth and brow movements as painting controls.</string>
 </dict>
 </plist>

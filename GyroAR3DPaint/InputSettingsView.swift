@@ -8,56 +8,32 @@ struct InputSettingsView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section {
-                    Text("Choose what each input controls. Each input can drive one parameter at a time.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                Section(header: Text("Draw Gate")) {
+                    GateSourceRow(selected: $manager.drawGateSource,
+                                  usedElsewhere: manager.usedSources.subtracting([manager.drawGateSource]))
                 }
-
-                ForEach(InputChannel.allCases, id: \.self) { channel in
-                    Section {
-                        HStack {
-                            Image(systemName: channel.icon)
-                                .frame(width: 24)
-                                .foregroundColor(.cyan)
-                            Picker(channel.rawValue, selection: manager.param(for: channel)) {
-                                ForEach(InputParameter.allCases, id: \.self) { p in
-                                    Text(p.rawValue).tag(p)
-                                }
-                            }
-                        }
-                    } header: {
-                        Text(channel.rawValue)
+                ForEach(manager.allMappings, id: \.label) { item in
+                    Section(header: Label(item.label, systemImage: item.icon).foregroundColor(.cyan)) {
+                        MappingRow(mapping: item.binding,
+                                   usedSources: manager.usedSources.subtracting([item.binding.wrappedValue.source]))
                     }
                 }
-
-                Section {
+                Section(header: Text("Camera Colors")) {
                     HStack {
-                        Image(systemName: "camera.aperture")
-                            .frame(width: 24)
-                            .foregroundColor(.orange)
-                        Text("Camera Palette Mode")
+                        Image(systemName: "camera.aperture").frame(width: 24).foregroundColor(.orange)
+                        Text("Palette Mode")
                         Spacer()
                         Picker("", selection: $drawingEngine.cameraColorMode) {
-                            ForEach(CameraColorMode.allCases, id: \.self) { m in
-                                Text(m.rawValue).tag(m)
-                            }
-                        }
-                        .pickerStyle(.menu)
+                            ForEach(CameraColorMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        }.pickerStyle(.menu)
                     }
-                } header: {
-                    Text("Camera Colors")
                 }
             }
-            .navigationTitle("Input Settings")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Input Settings").navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") { onDismiss?() }
-                }
+                ToolbarItem(placement: .navigationBarTrailing) { Button("Done") { onDismiss?() } }
             }
         }
         .frame(maxWidth: 400)
-        .background(Color.black.opacity(0.95))
     }
 }

@@ -238,9 +238,8 @@ struct ContentView: View {
     func setupAirPodsBinding() {
         airPodsManager.$colorGradientValue.sink { [self] value in
             drawingEngine.airPodsGradientValue = value
-            // Route AirPods gyro to mapped parameter (0–1 from -1…1)
             let normalized = Float((value + 1.0) / 2.0)
-            inputSettingsManager.apply(channel: .airPodsGyro, value: normalized, to: drawingEngine)
+            inputSettingsManager.applyGyro(value: normalized, isAirPods: true, to: drawingEngine)
         }.store(in: &controllerCancellables)
     }
 
@@ -253,8 +252,8 @@ struct ContentView: View {
         // Amplitude → brush size scale (0 = min, 1 = max) AND input settings routing
         micManager.$amplitude.sink { [self] amp in
             drawingEngine.micBrushScale = amp
-            // Route mic amplitude to user-mapped parameter
-            inputSettingsManager.apply(channel: .mic, value: amp, to: drawingEngine)
+            // Mic amplitude → brush size (via applyAll)
+            inputSettingsManager.applyAll(to: drawingEngine, controller: controllerManager)
         }.store(in: &controllerCancellables)
 
         // Spectral centroid → hue shift
@@ -693,7 +692,7 @@ struct ContentView: View {
                                         drawingEngine.drawingDistanceOffset = newValue
                                     }
                                     // Route left slider to mapped parameter
-                                    inputSettingsManager.apply(channel: .leftSlider, value: newValue, to: drawingEngine)
+                                    inputSettingsManager.applyAll(to: drawingEngine, controller: controllerManager)
                                 }
                         )
                     

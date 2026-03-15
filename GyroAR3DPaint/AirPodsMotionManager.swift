@@ -1,6 +1,7 @@
 import CoreMotion
 import SwiftUI
 import Combine
+import simd
 
 @MainActor
 class AirPodsMotionManager: ObservableObject {
@@ -14,6 +15,10 @@ class AirPodsMotionManager: ObservableObject {
     
     // Värigradientti-arvo: -1 = vasen (vaalea->tumma), 0 = keski (tasainen), 1 = oikea (tumma->vaalea)
     @Published var colorGradientValue: Float = 0
+
+    // Viimeisin raw rotation matrix — käytetään pään suunnan laskemiseen
+    // Tästä saadaan "korvien välin" suunta world-spacessa
+    @Published var headRotationMatrix: simd_float3x3 = matrix_identity_float3x3
     
     private let headphoneManager = CMHeadphoneMotionManager()
     private var motionQueue = OperationQueue()
@@ -51,6 +56,14 @@ class AirPodsMotionManager: ObservableObject {
                 
                 // ColorGradientValue suoraan rollista
                 self.colorGradientValue = Float(normalizedRoll)
+
+                // Tallenna rotation matrix pään suunnan laskemiseen
+                let r = motion.attitude.rotationMatrix
+                self.headRotationMatrix = simd_float3x3(
+                    SIMD3<Float>(Float(r.m11), Float(r.m21), Float(r.m31)),
+                    SIMD3<Float>(Float(r.m12), Float(r.m22), Float(r.m32)),
+                    SIMD3<Float>(Float(r.m13), Float(r.m23), Float(r.m33))
+                )
             }
         }
         
