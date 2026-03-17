@@ -525,97 +525,52 @@ class StrokeRenderer {
         let parent = ModelEntity()
         let pts = stroke.points
         guard pts.count >= 2 else { return parent }
-
-        // Sphere+cylinder per-point — sama kuin smooth mutta tentacle-profiililla.
-        // Jokainen piste saa oman UIColor:in → ei shared-material-rajoitetta.
-        // Pallot peittävät sylinterien päät → saumaton liukuväri.
-        let skip = performanceLevel.pointSkip
-        var sampled: [StrokePoint] = []
-        for (i, p) in pts.enumerated() where i % skip == 0 { sampled.append(p) }
-        if sampled.last?.timestamp != pts.last?.timestamp, let last = pts.last { sampled.append(last) }
-
-        for i in 0..<sampled.count {
-            let p   = sampled[i]
-            let pos = Float(i) / Float(max(1, sampled.count - 1))
-            let taper = 1.0 - pos * 0.65          // paksu alku, ohut loppu
-            let r     = p.brushSize * taper
-
-            // Väri tältä pisteeltä — gradientValue = liveColorT jos live-moodi päällä
-            let col = ringColor(point: p, stroke: stroke, index: i, total: sampled.count)
-            let uiCol = UIColor(red: CGFloat(col.r), green: CGFloat(col.g), blue: CGFloat(col.b), alpha: CGFloat(p.opacity))
-            let mat = SimpleMaterial(color: uiCol, isMetallic: false)
-
-            // Pallo tässä pisteessä — peittää edellisen sylinterin pään
-            let ball = ModelEntity(mesh: .generateSphere(radius: r), materials: [mat])
-            ball.position = p.position
-            parent.addChild(ball)
-
-            // Sylinteri edellisestä tähän pisteeseen
-            if i > 0 {
-                let prev     = sampled[i - 1]
-                let prevPos  = Float(i - 1) / Float(max(1, sampled.count - 1))
-                let prevT    = 1.0 - prevPos * 0.65
-                let midR     = p.brushSize * (taper + prevT) * 0.5  // säde puolivälissä
-
-                // Sylinterin väri = tämän + edellisen pisteen värien KESKIARVO
-                // → eliminoi näkyvä hypähdys sylinterin ja pallojen välillä
-                let prevCol = ringColor(point: prev, stroke: stroke, index: i-1, total: sampled.count)
-                let midUI   = UIColor(
-                    red:   CGFloat((col.r + prevCol.r) * 0.5),
-                    green: CGFloat((col.g + prevCol.g) * 0.5),
-                    blue:  CGFloat((col.b + prevCol.b) * 0.5),
-                    alpha: CGFloat(p.opacity)
-                )
-                let midMat = SimpleMaterial(color: midUI, isMetallic: false)
-
-                let dist = simd_distance(prev.position, p.position)
-                if dist > 0.0005 {
-                    let cyl = ModelEntity(
-                        mesh: .generateCylinder(height: dist, radius: midR),
-                        materials: [midMat]
-                    )
-                    cyl.position = (prev.position + p.position) * 0.5
-                    let dir = simd_normalize(p.position - prev.position)
-                    cyl.orientation = simd_quatf(from: SIMD3<Float>(0, 1, 0), to: dir)
-                    parent.addChild(cyl)
+        let seg = 8
+        // Tentacle: per-segmentti oma väri jotta ColorMode toimii tiheästi
+        // Ryhmitellään 3 pistettä per entity — suorituskyky vs väriresoluutio
+        let groupSize = 3
+        var i = 0
+        while i < pts.count - 1 {
+            let end = min(i + groupSize, pts.count - 1)
+            let midIdx = (i + end) / 2
+            let p = pts[midIdx]
+            let strokePos = pts.count > 1 ? Float(midIdx) / Float(pts.count - 1) : 0
+            let col = pointColor(p, stroke,
+                                 hueShift: Float.random(in: -0.08...0.08),
+                                 gradientPosition: strokePos,
+                                 pointIndex: midIdx)
+            var verts: [SIMD3<Float>] = []
+            var inds:  [UInt32]       = []
+            var localIdx = 0
+            for j in i...end {
+                let pp = pts[j]
+                let dir   = direction(at: j, pts: pts)
+                let basis = makeBasis(dir)
+                let taper = 1.0 - Float(j) / Float(pts.count) * 0.7
+                for k in 0..<seg {
+                    let angle  = Float(k) / Float(seg) * .pi * 2
+                    let wobble = sin(Float(j) * 0.5 + angle * 2) * 0.3
+                    let norm   = basis.0 * cos(angle) + basis.1 * sin(angle)
+                    verts.append(pp.position + norm * pp.brushSize * taper * (1 + wobble))
                 }
+                if localIdx > 0 {
+                    for k in 0..<seg {
+                        let n  = (k + 1) % seg
+                        let b  = UInt32((localIdx - 1) * seg)
+                        let t  = UInt32(localIdx * seg)
+                        inds += [b+UInt32(k), t+UInt32(k), b+UInt32(n),
+                                 b+UInt32(n), t+UInt32(k), t+UInt32(n)]
+                    }
+                }
+                localIdx += 1
             }
+            parent.addChild(buildMesh(verts, inds, col))
+            i += groupSize
         }
         return parent
     }
 
-    // Laskee renkaan värin: jos liveSource aktiivinen, interpoloi A→B; muuten pointColor-järjestelmä
-    private func ringColor(point p: StrokePoint, stroke: Stroke, index: Int, total: Int) -> (r: CGFloat, g: CGFloat, b: CGFloat) {
-        let uiCol: UIColor
-        if let preset = stroke.brushPreset, preset.colorMode.liveSource != .off {
-            // Live-interpolaatio: gradientValue on tallennettu liveColorT (0=A, 1=B)
-            let t = CGFloat(max(0, min(1, p.gradientValue)))
-            let hA = CGFloat(preset.colorMode.liveHueA)
-            let hB = CGFloat(preset.colorMode.liveHueB)
-            var dh = hB - hA
-            if dh > 0.5 { dh -= 1 }
-            if dh < -0.5 { dh += 1 }
-            let h = (hA + dh * t).truncatingRemainder(dividingBy: 1)
-            let sat = CGFloat(preset.colorMode.liveSaturation)
-            let bri = CGFloat(preset.colorMode.liveBrightness)
-            uiCol = UIColor(hue: h < 0 ? h + 1 : h, saturation: sat, brightness: bri, alpha: 1)
-        } else {
-            // Normaali ColorMode (gradient, rainbow, noise jne.)
-            let pos = total > 1 ? Float(index) / Float(total - 1) : 0
-            uiCol = pointColor(p, stroke,
-                               hueShift: Float.random(in: -0.05...0.05),
-                               gradientPosition: pos,
-                               pointIndex: index)
-        }
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        uiCol.getRed(&r, green: &g, blue: &b, alpha: &a)
-        return (r, g, b)
-    }
-
     private func tentacleUIColor(for t: Float, base: Color) -> UIColor { UIColor(base) }
-
-    // Rakentaa meshin per-vertex väreillä — GPU interpoloi automaattisesti → saumaton liukuväri
-
     
     private func makeRoot(_ stroke: Stroke) -> ModelEntity {
         let parent = ModelEntity()
