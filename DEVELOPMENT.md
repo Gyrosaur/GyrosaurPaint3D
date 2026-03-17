@@ -140,3 +140,30 @@
 5. Säädä Threshold ja Release
 6. Piirrä — väri muuttuu reaaliajassa stickiä/ääntä liikuttamalla
 
+
+## v0.9 — Tentacle saumaton liukuväri (tämä sessio)
+
+### Diagnoosi kuvasta:
+- Vanha koodi teki per-3-pisteen segment -entiteettejä joista jokaisella oma tasainen väri
+- Tulos: teräviä geometrisia rajoja kuin polygonipolygoni-faketteja
+- Haluttu: auringonlaskun kaltainen jatkuva sulava liukuväri
+
+### Ratkaisu:
+- `makeTentacle()` kirjoitettu kokonaan uudelleen per-ring-arkkitehtuurilla
+- Jokainen "rengas" (cross-section) on yksi entity
+- Kaksi peräkkäistä rengasta muodostaa yhden thin-segment-entityn
+- Segment-entityn väri = edellisen + nykyisen renkaan värin KESKIARVO
+- → GPU:n Gouraud-shading interpoloi luontaisesti renkaan sisällä
+- → Näkyvät rajat häviävät kun segmentit ovat 1-pisteen välein
+
+### Värin laskenta per-rengas (ringColor()):
+- Jos liveSource aktiivinen: interpoloi A→B lyhintä hue-reittiä, gradientValue = liveColorT
+- Muuten: normaali pointColor() + ColorMode (gradient, rainbow, noise jne.)
+- Pieni satunnainen hueShift ±0.05 lisää orgaanisuutta
+
+### Miksi tämä toimii:
+- Jokainen segment on 1 pisteen paksu → mitä tiheämmin piirretty, sitä hienompi väriresoluutio
+- SimpleMaterial interpoloi värin per-face (ei per-vertex) — mutta kun facet on pieni, efekti on saumaton
+- Väri laskee mid-color = (rengas[i] + rengas[i-1]) / 2 → vähentää hypähdyksiä
+- LiveColorT tallennetaan gradientValue-kenttään per-pisteeseen → arvo säilyy kun stroke on valmis
+

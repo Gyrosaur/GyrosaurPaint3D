@@ -522,45 +522,66 @@ class StrokeRenderer {
     }
     
     private func makeTentacle(_ stroke: Stroke) -> ModelEntity {
+        let parent = ModelEntity()
         let pts = stroke.points
-        guard pts.count >= 2 else { return ModelEntity() }
-        let seg = 8
+        guard pts.count >= 2 else { return parent }
 
-        var verts:  [SIMD3<Float>] = []
-        var inds:   [UInt32]       = []
-        var colors: [SIMD4<Float>] = []  // per-vertex RGBA
+        // Sphere+cylinder per-point — sama kuin smooth mutta tentacle-profiililla.
+        // Jokainen piste saa oman UIColor:in → ei shared-material-rajoitetta.
+        // Pallot peittävät sylinterien päät → saumaton liukuväri.
+        let skip = performanceLevel.pointSkip
+        var sampled: [StrokePoint] = []
+        for (i, p) in pts.enumerated() where i % skip == 0 { sampled.append(p) }
+        if sampled.last?.timestamp != pts.last?.timestamp, let last = pts.last { sampled.append(last) }
 
-        for i in 0..<pts.count {
-            let p   = pts[i]
-            let dir = direction(at: i, pts: pts)
-            let (b0, b1) = makeBasis(dir)
-            let taper = 1.0 - Float(i) / Float(pts.count) * 0.7
+        for i in 0..<sampled.count {
+            let p   = sampled[i]
+            let pos = Float(i) / Float(max(1, sampled.count - 1))
+            let taper = 1.0 - pos * 0.65          // paksu alku, ohut loppu
+            let r     = p.brushSize * taper
 
-            // Laske tämän renkaan väri — gradientValue = liveColorT (0=A, 1=B)
-            let col = ringColor(point: p, stroke: stroke, index: i, total: pts.count)
-            let rgba = SIMD4<Float>(Float(col.r), Float(col.g), Float(col.b), Float(p.opacity))
+            // Väri tältä pisteeltä — gradientValue = liveColorT jos live-moodi päällä
+            let col = ringColor(point: p, stroke: stroke, index: i, total: sampled.count)
+            let uiCol = UIColor(red: CGFloat(col.r), green: CGFloat(col.g), blue: CGFloat(col.b), alpha: CGFloat(p.opacity))
+            let mat = SimpleMaterial(color: uiCol, isMetallic: false)
 
-            for j in 0..<seg {
-                let angle  = Float(j) / Float(seg) * .pi * 2
-                let wobble = sin(Float(i) * 0.5 + angle * 2) * 0.3
-                let norm   = b0 * cos(angle) + b1 * sin(angle)
-                verts.append(p.position + norm * p.brushSize * taper * (1 + wobble))
-                colors.append(rgba)  // kaikki saman renkaan verteksit saavat saman värin
-            }
+            // Pallo tässä pisteessä — peittää edellisen sylinterin pään
+            let ball = ModelEntity(mesh: .generateSphere(radius: r), materials: [mat])
+            ball.position = p.position
+            parent.addChild(ball)
 
+            // Sylinteri edellisestä tähän pisteeseen
             if i > 0 {
-                for j in 0..<seg {
-                    let n  = (j + 1) % seg
-                    let b  = UInt32((i - 1) * seg)
-                    let t  = UInt32(i * seg)
-                    // Kaksi kolmiota per quad
-                    inds += [b+UInt32(j), t+UInt32(j), b+UInt32(n),
-                             b+UInt32(n), t+UInt32(j), t+UInt32(n)]
+                let prev     = sampled[i - 1]
+                let prevPos  = Float(i - 1) / Float(max(1, sampled.count - 1))
+                let prevT    = 1.0 - prevPos * 0.65
+                let midR     = p.brushSize * (taper + prevT) * 0.5  // säde puolivälissä
+
+                // Sylinterin väri = tämän + edellisen pisteen värien KESKIARVO
+                // → eliminoi näkyvä hypähdys sylinterin ja pallojen välillä
+                let prevCol = ringColor(point: prev, stroke: stroke, index: i-1, total: sampled.count)
+                let midUI   = UIColor(
+                    red:   CGFloat((col.r + prevCol.r) * 0.5),
+                    green: CGFloat((col.g + prevCol.g) * 0.5),
+                    blue:  CGFloat((col.b + prevCol.b) * 0.5),
+                    alpha: CGFloat(p.opacity)
+                )
+                let midMat = SimpleMaterial(color: midUI, isMetallic: false)
+
+                let dist = simd_distance(prev.position, p.position)
+                if dist > 0.0005 {
+                    let cyl = ModelEntity(
+                        mesh: .generateCylinder(height: dist, radius: midR),
+                        materials: [midMat]
+                    )
+                    cyl.position = (prev.position + p.position) * 0.5
+                    let dir = simd_normalize(p.position - prev.position)
+                    cyl.orientation = simd_quatf(from: SIMD3<Float>(0, 1, 0), to: dir)
+                    parent.addChild(cyl)
                 }
             }
         }
-
-        return buildMeshGradient(verts, inds, colors)
+        return parent
     }
 
     // Laskee renkaan värin: jos liveSource aktiivinen, interpoloi A→B; muuten pointColor-järjestelmä
@@ -594,59 +615,7 @@ class StrokeRenderer {
     private func tentacleUIColor(for t: Float, base: Color) -> UIColor { UIColor(base) }
 
     // Rakentaa meshin per-vertex väreillä — GPU interpoloi automaattisesti → saumaton liukuväri
-    private func buildMeshGradient(_ verts: [SIMD3<Float>], _ inds: [UInt32], _ colors: [SIMD4<Float>]) -> ModelEntity {
-        var desc = MeshDescriptor()
-        desc.positions = MeshBuffer(verts)
-        desc.primitives = .triangles(inds)
-        // Per-vertex väri — RealityKit interpoloi GPU:ssa ilman rajoja
-        do {
-            var mesh = try MeshResource.generate(from: [desc])
-            // Päivitetään vertex-värit erillisellä instanssi-päivityksellä
-            // Käytetään UnlitMaterial + vertex colors trick:
-            // SimpleMaterial ei tue vertex coloreja suoraan, joten käytetään
-            // JOKA RENKAAN VÄRIÄ monochromatic SimpleMaterial:lla per-ring-entity:nä
-            // koska buildMeshGradient on fallback — käytetään gradient-materiaalia
-            let _ = mesh
-        } catch {}
 
-        // Koska RealityKit ei tue vertex-värejä suoraan SimpleMaterial:lla,
-        // käytetään PhysicallyBasedMaterial + baseColor per segment.
-        // Tehdään oikea ratkaisu: kaikki verteksit per-ring-entity (ultra-thin segments)
-        let parent = ModelEntity()
-        let totalRings = verts.count / 8
-        guard totalRings >= 2 else { return parent }
-        let seg = 8
-        for i in 1..<totalRings {
-            let col = colors[i * seg]  // Tämän renkaan väri
-            let prevCol = colors[(i - 1) * seg]  // Edellisen renkaan väri
-            // Interpoloi väri näiden kahden renkaan välillä
-            let midCol = SIMD4<Float>(
-                (col.x + prevCol.x) * 0.5,
-                (col.y + prevCol.y) * 0.5,
-                (col.z + prevCol.z) * 0.5,
-                (col.w + prevCol.w) * 0.5
-            )
-            var segVerts: [SIMD3<Float>] = []
-            var segInds:  [UInt32]       = []
-            for j in 0..<seg {
-                segVerts.append(verts[(i-1)*seg + j])
-                segVerts.append(verts[i*seg + j])
-            }
-            for j in 0..<seg {
-                let n  = (j + 1) % seg
-                let b  = UInt32(j * 2)
-                let t  = UInt32(j * 2 + 1)
-                let nb = UInt32(n * 2)
-                let nt = UInt32(n * 2 + 1)
-                segInds += [b, t, nb, nb, t, nt]
-            }
-            let entity = buildMesh(segVerts, segInds,
-                UIColor(red: CGFloat(midCol.x), green: CGFloat(midCol.y),
-                        blue: CGFloat(midCol.z), alpha: CGFloat(midCol.w)))
-            parent.addChild(entity)
-        }
-        return parent
-    }
     
     private func makeRoot(_ stroke: Stroke) -> ModelEntity {
         let parent = ModelEntity()
