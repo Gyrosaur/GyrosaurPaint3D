@@ -104,3 +104,39 @@
 - `InputSettingsView` — `TentacleColorSettingsView` lisätty (source, värit A/B, threshold, release, live preview)
 - `pbxproj` — `TentacleColorController.swift` lisätty Build + FileRef + Group + Sources
 
+
+## v0.8 — Tentacle live color oikein (tämä sessio)
+
+### Mikä meni pieleen v0.7:ssa:
+- TentacleColorController oli väärä lähestymistapa — se oli erillinen järjestelmä
+- Oikea tentacle-brush on BrushType.tentacle (enum), neljäs brush-valikossa
+- Ongelma oli että makeTentacle() rakensi yhdistelmämeshin yhdellä värillä eikä hyödyntänyt ColorMode:a per-pisteessä
+
+### Tehty v0.8:
+- `TentacleColorController.swift` poistettu kokonaan, kaikki viittaukset siivottu
+- `BrushDefinition.ColorMode` laajennettu:
+  - `liveSource: LiveColorSource` — Off / Xbox Stick X/Y / LT / RT / Mic Pitch / Mic Amplitude
+  - `liveHueA`, `liveHueB` — värit A ja B (hue 0–1)
+  - `liveSaturation`, `liveBrightness` — saturaatio ja kirkkaus molemmille
+  - `liveThreshold` — kynnys alle jonka = väri A
+  - `liveRelease` — palautumisnopeus per frame (pehmeä alas, nopea ylös)
+- `DrawingEngine.updateLiveColor()` — per-tick, nopea ylöspäin / pehmeä release alaspäin
+- `DrawingEngine.addPoint()` — tallentaa `liveColorT` gradientValue-kenttään kun preset + liveSource aktiiivisena
+- `ARViewContainer.frameUpdate()` — kutsuu `updateLiveColor()` per tick
+- `StrokeRenderer.applyColorMode()` — live-interpolaatio hue A→B lyhintä reittiä
+- `StrokeRenderer.makeTentacle()` — korjattu: per-3-pisteen segmentti, käyttää `pointColor()` + ColorMode
+- `BrushStudio/BrushStudioView.swift ColorTab` — Live Color -osio:
+  - Lähteen valinta (Picker)
+  - Väripikkerit A ja B
+  - LinearGradient-preview A→B
+  - Threshold ja Release speed sliderit
+- `liveGradientColors()` helper-funktio BrushStudioViewin ulkopuolella
+
+### Käyttö:
+1. Avaa Brush Studio → valitse Tentacle-preset tai luo uusi
+2. Color-välilehdellä → Live Color (Input) -osio
+3. Valitse Source: esim. "Xbox Right Stick X" tai "Mic Pitch"
+4. Säädä värit A (matala) ja B (korkea)
+5. Säädä Threshold ja Release
+6. Piirrä — väri muuttuu reaaliajassa stickiä/ääntä liikuttamalla
+
