@@ -74,3 +74,17 @@
 - `StillARCanvas` + Coordinator kirjoitettu puhtaasti, `@MainActor` + `assumeIsolated`
 - Draw distance max 0.5m (aiemman 2m sijaan)
 
+
+## v0.7 — Vasemman reunan ikonit → yksi nappi; Tentacle live-värinohjaus (tämä sessio)
+
+### Suunnitelma:
+1. ContentView: vasemman reunan 8 ikonia → yksi "⋯" nappi joka avaa popoeverin niistä
+2. Tentacle brush: live-värinohjaus piirron aikana
+   - Xbox tatti tai mikrofoni pitch → hue muutos reaaliajassa (per-point väri)
+   - Kaksi väriäärireytä (A ja B) joiden välillä liikutaan
+   - Threshold + release-aika
+   - Toteutetaan DrawingEngine:en TentacleColorController-rakenteena
+   - StrokeRenderer päivitetään käyttämään per-point dynaamista hue-arvoa
+
+### Tehty:
+

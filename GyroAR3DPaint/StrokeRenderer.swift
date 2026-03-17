@@ -501,21 +501,91 @@ class StrokeRenderer {
     }
     
     private func makeTentacle(_ stroke: Stroke) -> ModelEntity {
-        var verts: [SIMD3<Float>] = [], inds: [UInt32] = []
-        let pts = stroke.points, seg = 8
-        for i in 0..<pts.count {
-            let p = pts[i], dir = direction(at: i, pts: pts), basis = makeBasis(dir)
-            let taper = 1.0 - Float(i) / Float(pts.count) * 0.7
-            for j in 0..<seg {
-                let angle = Float(j) / Float(seg) * .pi * 2
-                let wobble = sin(Float(i) * 0.5 + angle * 2) * 0.3
-                let norm = basis.0 * cos(angle) + basis.1 * sin(angle)
-                verts.append(p.position + norm * p.brushSize * taper * (1 + wobble))
+        let parent = ModelEntity()
+        let pts = stroke.points
+        guard pts.count >= 2 else { return parent }
+        let seg = 8
+
+        // Jos yhdellekään pisteelle on tentacleHue asetettu, tehdään per-segment väritys
+        let hasLiveColor = pts.contains { $0.tentacleHue >= 0 }
+
+        if hasLiveColor {
+            // Per-segment mesh — jokaiselle pisteparille oma ModelEntity omalla värillä
+            // Ryhmitellään 4 peräkkäistä pistettä yhteen entiteettiin suorituskyvyn takia
+            let groupSize = 4
+            var groupStart = 0
+            while groupStart < pts.count - 1 {
+                let groupEnd = min(groupStart + groupSize, pts.count - 1)
+                let groupPts = Array(pts[groupStart...groupEnd])
+                let midT = groupPts.map { max(0, $0.tentacleHue) }.reduce(0, +) / Float(groupPts.count)
+                let col = tentacleUIColor(for: midT, base: stroke.color)
+
+                var verts: [SIMD3<Float>] = []
+                var inds: [UInt32] = []
+                for i in 0..<groupPts.count {
+                    let p = groupPts[i]
+                    let globalIdx = groupStart + i
+                    let dir = direction(at: globalIdx, pts: pts)
+                    let basis = makeBasis(dir)
+                    let taper = 1.0 - Float(globalIdx) / Float(pts.count) * 0.7
+                    for j in 0..<seg {
+                        let angle = Float(j) / Float(seg) * .pi * 2
+                        let wobble = sin(Float(globalIdx) * 0.5 + angle * 2) * 0.3
+                        let norm = basis.0 * cos(angle) + basis.1 * sin(angle)
+                        verts.append(p.position + norm * p.brushSize * taper * (1 + wobble))
+                    }
+                    if i > 0 {
+                        for j in 0..<seg {
+                            let n = (j + 1) % seg
+                            let b = UInt32((i - 1) * seg)
+                            let t = UInt32(i * seg)
+                            inds += [b+UInt32(j), t+UInt32(j), b+UInt32(n),
+                                     b+UInt32(n), t+UInt32(j), t+UInt32(n)]
+                        }
+                    }
+                }
+                let entity = buildMesh(verts, inds, col)
+                parent.addChild(entity)
+                groupStart += groupSize
             }
-            if i > 0 { for j in 0..<seg { let n = (j + 1) % seg; let b = UInt32((i - 1) * seg); let t = UInt32(i * seg)
-                inds += [b + UInt32(j), t + UInt32(j), b + UInt32(n), b + UInt32(n), t + UInt32(j), t + UInt32(n)] } }
+        } else {
+            // Normaali yhtenäinen mesh
+            var verts: [SIMD3<Float>] = [], inds: [UInt32] = []
+            for i in 0..<pts.count {
+                let p = pts[i], dir = direction(at: i, pts: pts), basis = makeBasis(dir)
+                let taper = 1.0 - Float(i) / Float(pts.count) * 0.7
+                for j in 0..<seg {
+                    let angle = Float(j) / Float(seg) * .pi * 2
+                    let wobble = sin(Float(i) * 0.5 + angle * 2) * 0.3
+                    let norm = basis.0 * cos(angle) + basis.1 * sin(angle)
+                    verts.append(p.position + norm * p.brushSize * taper * (1 + wobble))
+                }
+                if i > 0 {
+                    for j in 0..<seg {
+                        let n = (j + 1) % seg
+                        let b = UInt32((i - 1) * seg)
+                        let t = UInt32(i * seg)
+                        inds += [b+UInt32(j), t+UInt32(j), b+UInt32(n),
+                                 b+UInt32(n), t+UInt32(j), t+UInt32(n)]
+                    }
+                }
+            }
+            parent.addChild(buildMesh(verts, inds, pointColor(pts[0], stroke, hueShift: Float.random(in: -0.1...0.1))))
         }
-        return buildMesh(verts, inds, pointColor(pts[0], stroke))
+        return parent
+    }
+
+    // Interpoloi värin tentacleHue (0=A, 1=B) välillä base-väristä lähtien
+    private func tentacleUIColor(for t: Float, base: Color) -> UIColor {
+        guard t > 0.001 else { return UIColor(base) }
+        // Väri B on hue +0.5 kierrettynä (komplementtiväri) jos controller ei aseta
+        var h: CGFloat = 0, s: CGFloat = 0, v: CGFloat = 0, a: CGFloat = 0
+        UIColor(base).getHue(&h, saturation: &s, brightness: &v, alpha: &a)
+        let hB = (h + 0.5).truncatingRemainder(dividingBy: 1.0)
+        let hMix = (h + CGFloat(t) * (hB - h + (hB < h ? 1 : 0))).truncatingRemainder(dividingBy: 1.0)
+        let sMix = min(1.0, s + CGFloat(t) * 0.3)
+        let vMix = max(0.3, v - CGFloat(t) * 0.2)
+        return UIColor(hue: hMix, saturation: sMix, brightness: vMix, alpha: a)
     }
     
     private func makeRoot(_ stroke: Stroke) -> ModelEntity {

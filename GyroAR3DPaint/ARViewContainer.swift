@@ -115,7 +115,14 @@ struct ARViewContainer: UIViewRepresentable {
             guard let arView = arView,
                   let drawingEngine = drawingEngine,
                   let frame = arView.session.currentFrame else { return }
-            
+
+            // Tentacle live color — päivitetään joka frame piirron aikana
+            drawingEngine.tentacleColor.update(
+                controller: controllerManager,
+                micPitch: drawingEngine.micHueShift,
+                micAmplitude: drawingEngine.micBrushScale
+            )
+
             let brushPosition = getBrushPosition(from: frame)
             
             // Right stick (R3 pressed) → smooth distance control

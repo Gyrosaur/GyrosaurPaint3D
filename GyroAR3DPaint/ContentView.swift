@@ -25,6 +25,7 @@ struct ContentView: View {
     @StateObject var inputSettingsManager = InputSettingsManager()
     
     @State private var showBrushPicker = false
+    @State private var showTentacleSettings = false
     @State private var showBrushStudio = false
     @State private var showBrushNotes = false
     @State private var notesForBrush: BrushType = .smooth
@@ -37,6 +38,7 @@ struct ContentView: View {
     @State private var showPaintImagePicker = false
     @State private var showPerformanceSettings = false
     @State private var showMIDISettings = false
+    @State private var showStatusPanel = false  // kollapsoitu vasen reunapalkki
     @State private var paintPhotoItem: PhotosPickerItem?
     @State private var tempPaintImage: UIImage?
     @State private var selectedPhotoItem: PhotosPickerItem?
@@ -914,110 +916,112 @@ struct ContentView: View {
     
     var recordingStatusIcons: some View {
         HStack {
-            VStack(spacing: 6) {
-                // Back to menu button
-                if let exitAction = onExitToMenu {
-                    Button(action: exitAction) {
-                        ZStack {
-                            Circle()
-                                .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.gray.opacity(0.4), Color.black.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                .frame(width: 32, height: 32)
-                            Circle()
-                                .fill(RadialGradient(colors: [Color.white.opacity(0.25), Color.clear], center: .topLeading, startRadius: 0, endRadius: 20))
-                                .frame(width: 30, height: 30)
-                            Image(systemName: "house.fill")
-                                .font(.system(size: 14))
-                                .foregroundColor(.white.opacity(0.9))
+            // Yksi nappi joka avaa kaikki toiminnot popoverina
+            Button { showStatusPanel.toggle() } label: {
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.gray.opacity(0.4), Color.black.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 32, height: 32)
+                    // Pieni status-indikaattori (yhteydet)
+                    VStack(spacing: 1) {
+                        ForEach(0..<3) { _ in
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(Color.white.opacity(0.8))
+                                .frame(width: 12, height: 2)
                         }
                     }
-                }
-                
-                // Performance indicator
-                Button(action: { showPerformanceSettings = true }) {
-                    ZStack {
-                        Circle()
-                            .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.gray.opacity(0.4), Color.black.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .frame(width: 32, height: 32)
-                        Circle()
-                            .fill(RadialGradient(colors: [Color.white.opacity(0.25), Color.clear], center: .topLeading, startRadius: 0, endRadius: 20))
-                            .frame(width: 30, height: 30)
-                        Image(systemName: performanceManager.currentLevel.icon)
-                            .font(.system(size: 14))
-                            .foregroundColor(performanceManager.currentLevel.color)
-                    }
-                }
-                
-                // Controller icon
-                if controllerManager.isConnected {
-                    ZStack {
-                        Circle()
-                            .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.gray.opacity(0.4), Color.black.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .frame(width: 32, height: 32)
-                        Circle()
-                            .fill(RadialGradient(colors: [Color.white.opacity(0.25), Color.clear], center: .topLeading, startRadius: 0, endRadius: 20))
-                            .frame(width: 30, height: 30)
-                        Image(systemName: "gamecontroller.fill")
-                            .font(.system(size: 14))
-                            .foregroundColor(.green)
-                    }
-                }
-                
-                // AirPods icon
-                AirPodsStatusView(manager: airPodsManager)
-
-                // Input source selector (Gyro / Mic / Both)
-                inputSourceButton
-
-                // Camera color palette picker
-                cameraColorButton
-
-                // Input settings
-                Button(action: { showInputSettings = true }) {
-                    ZStack {
-                        Circle()
-                            .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.gray.opacity(0.4), Color.black.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .frame(width: 32, height: 32)
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: 14))
-                            .foregroundColor(.white)
-                    }
-                }
-                
-                // MIDI Status & Toggle
-                Button(action: { showMIDISettings = true }) {
-                    ZStack {
-                        Circle()
-                            .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.gray.opacity(0.4), Color.black.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .frame(width: 32, height: 32)
-                        Circle()
-                            .fill(RadialGradient(colors: [Color.white.opacity(0.25), Color.clear], center: .topLeading, startRadius: 0, endRadius: 20))
-                            .frame(width: 30, height: 30)
-                        Image(systemName: midiManager.isConnected ? "music.note.list" : "music.note")
-                            .font(.system(size: 14))
-                            .foregroundColor(midiManager.isConnected ? .green : .gray)
-                    }
-                }
-                
-                // MIDI Output ON/OFF Toggle
-                if midiManager.isConnected {
-                    Button(action: { midiManager.isMIDIEnabled.toggle() }) {
-                        ZStack {
-                            Circle()
-                                .fill(midiManager.isMIDIEnabled ? Color.green.opacity(0.3) : Color.gray.opacity(0.2))
-                                .frame(width: 32, height: 32)
-                            Image(systemName: midiManager.isMIDIEnabled ? "waveform" : "waveform.slash")
-                                .font(.system(size: 14))
-                                .foregroundColor(midiManager.isMIDIEnabled ? .green : .gray)
-                        }
+                    // Vihreä piste jos jotain on yhdistetty
+                    if controllerManager.isConnected || airPodsManager.isConnected || midiManager.isConnected {
+                        Circle().fill(Color.green).frame(width: 7, height: 7)
+                            .offset(x: 10, y: -10)
                     }
                 }
             }
-            
+            .popover(isPresented: $showStatusPanel) { statusPanelView }
             Spacer()
         }
         .padding(.leading, 12)
     }
-    
+
+    var statusPanelView: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("CONTROLS").font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundColor(.gray).padding(.bottom, 4)
+            // Menu
+            if let exitAction = onExitToMenu {
+                statusRow("house.fill", label: "Menu", color: .white) { exitAction(); showStatusPanel = false }
+            }
+            // Performance
+            statusRow(performanceManager.currentLevel.icon,
+                      label: "Performance: \(performanceManager.currentLevel.rawValue)",
+                      color: performanceManager.currentLevel.color) {
+                showPerformanceSettings = true; showStatusPanel = false
+            }
+            // Controller
+            if controllerManager.isConnected {
+                HStack(spacing: 8) {
+                    Image(systemName: "gamecontroller.fill").foregroundColor(.green).frame(width: 20)
+                    Text(controllerManager.controllerName).font(.system(size: 13))
+                    Spacer()
+                    Circle().fill(Color.green).frame(width: 7, height: 7)
+                }
+                .padding(.vertical, 6).padding(.horizontal, 10)
+            }
+            // AirPods
+            AirPodsStatusView(manager: airPodsManager)
+                .padding(.vertical, 2).padding(.horizontal, 4)
+            Divider()
+            // Input source
+            HStack(spacing: 8) {
+                inputSourceButton
+                Text("Input: \(drawingEngine.inputSource.rawValue)").font(.system(size: 13))
+                Spacer()
+            }.padding(.horizontal, 4)
+            // Camera color
+            HStack(spacing: 8) {
+                cameraColorButton
+                Text("Camera Color").font(.system(size: 13))
+                Spacer()
+                if drawingEngine.cameraColorEnabled {
+                    Text(cameraModeBadge).font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.orange)
+                }
+            }.padding(.horizontal, 4)
+            Divider()
+            // Input settings
+            statusRow("slider.horizontal.3", label: "Input Settings", color: .white) {
+                showInputSettings = true; showStatusPanel = false
+            }
+            // MIDI
+            statusRow(midiManager.isConnected ? "music.note.list" : "music.note",
+                      label: "MIDI Settings",
+                      color: midiManager.isConnected ? .green : .gray) {
+                showMIDISettings = true; showStatusPanel = false
+            }
+            if midiManager.isConnected {
+                HStack {
+                    Text("MIDI Output").font(.system(size: 12)).foregroundColor(.secondary).padding(.leading, 28)
+                    Spacer()
+                    Toggle("", isOn: $midiManager.isMIDIEnabled).labelsHidden()
+                }.padding(.horizontal, 10)
+            }
+        }
+        .padding(12).frame(width: 240)
+        .background(Color.black.opacity(0.9))
+    }
+
+    private func statusRow(_ icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon).foregroundColor(color).frame(width: 20)
+                Text(label).font(.system(size: 13)).foregroundColor(.white)
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 10)).foregroundColor(.gray)
+            }
+            .padding(.vertical, 6).padding(.horizontal, 10)
+        }
+    }
+                
     var freezeSliderView: some View {
         VStack(spacing: 4) {
             Text("Screenshot Freeze: \(String(format: "%.2f", screenshotFreezeTime))s")
@@ -1339,6 +1343,17 @@ extension ContentView {
             // 2. Brush picker
             Button(action: { showBrushPicker.toggle() }) {
                 SmallToolBtnView(icon: drawingEngine.selectedBrushType.icon, size: 32, hl: false)
+            }
+
+            // 2b. Tentacle color settings — näkyy vain kun tentacle valittu
+            if drawingEngine.selectedBrushType == .tentacle {
+                Button(action: { showTentacleSettings.toggle() }) {
+                    SmallToolBtnView(icon: "waveform.path.ecg", size: 32,
+                                     hl: drawingEngine.tentacleColor.source != .off)
+                }
+                .sheet(isPresented: $showTentacleSettings) {
+                    TentacleColorSettingsView(tc: drawingEngine.tentacleColor)
+                }
             }
             
             // 3. Brush Studio - highlight when studio preset is active

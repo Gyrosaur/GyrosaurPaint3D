@@ -75,8 +75,9 @@ struct StrokePoint {
     var brushSize: Float
     var timestamp: TimeInterval
     var opacity: Float = 1.0
-    var color: Color? = nil  // Per-point color (nil = use stroke color)
-    var gradientValue: Float = 0  // AirPods gradient: -1 = light->dark, 0 = uniform, 1 = dark->light
+    var color: Color? = nil
+    var gradientValue: Float = 0
+    var tentacleHue: Float = -1  // -1 = not set, 0…1 = live hue override (Tentacle brush)
 }
 
 struct Stroke: Identifiable {
@@ -154,6 +155,9 @@ class DrawingEngine: ObservableObject {
     @Published var micBrushScale: Float = 0.0
     /// Spectral centroid 0–1 → hue rotation added to current stroke colour.
     @Published var micHueShift: Float = 0.0
+
+    // MARK: - Tentacle Live Color Controller
+    @Published var tentacleColor = TentacleColorController()
 
     // MARK: - Brush Studio Integration
     @Published var activeBrushPreset: BrushDefinition = BrushDefinition.defaultSmooth
@@ -318,8 +322,9 @@ class DrawingEngine: ObservableObject {
             brushSize: finalBrushSize,
             timestamp: Date().timeIntervalSince1970,
             opacity: opacity,
-            color: pointColor,  // Always store current color
-            gradientValue: airPodsGradientValue  // Store AirPods gradient value
+            color: pointColor,
+            gradientValue: airPodsGradientValue,
+            tentacleHue: selectedBrushType == .tentacle ? tentacleColor.currentT : -1
         )
         
         currentStroke?.addPoint(point)
