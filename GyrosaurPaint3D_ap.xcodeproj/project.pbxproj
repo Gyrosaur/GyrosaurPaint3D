@@ -41,7 +41,6 @@
 		WATCH001 /* WatchMotionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = WATCH011 /* WatchMotionManager.swift */; };
 		FACE0001 /* FaceInputManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0011 /* FaceInputManager.swift */; };
 		MREC0001 /* MotionRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = MREC0011 /* MotionRecorder.swift */; };
-		TENT0001 /* TentacleColorController.swift in Sources */ = {isa = PBXBuildFile; fileRef = TENT0011 /* TentacleColorController.swift */; };
 		WCF00001 /* WatchConnectivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = WCF00011 /* WatchConnectivity.framework */; };
 /* End PBXBuildFile section */
 
@@ -82,7 +81,6 @@
 		WATCH011 /* WatchMotionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMotionManager.swift; sourceTree = "<group>"; };
 		FACE0011 /* FaceInputManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceInputManager.swift; sourceTree = "<group>"; };
 		MREC0011 /* MotionRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionRecorder.swift; sourceTree = "<group>"; };
-		TENT0011 /* TentacleColorController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TentacleColorController.swift; sourceTree = "<group>"; };
 		WCF00011 /* WatchConnectivity.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WatchConnectivity.framework; path = System/Library/Frameworks/WatchConnectivity.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -146,7 +144,6 @@
 				WATCH011 /* WatchMotionManager.swift */,
 				FACE0011 /* FaceInputManager.swift */,
 				MREC0011 /* MotionRecorder.swift */,
-				TENT0011 /* TentacleColorController.swift */,
 			);
 			path = GyroAR3DPaint;
 			sourceTree = "<group>";
@@ -276,7 +273,6 @@
 				WATCH001 /* WatchMotionManager.swift in Sources */,
 				FACE0001 /* FaceInputManager.swift in Sources */,
 				MREC0001 /* MotionRecorder.swift in Sources */,
-				TENT0001 /* TentacleColorController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

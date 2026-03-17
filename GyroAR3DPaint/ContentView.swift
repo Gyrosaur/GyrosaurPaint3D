@@ -25,7 +25,6 @@ struct ContentView: View {
     @StateObject var inputSettingsManager = InputSettingsManager()
     
     @State private var showBrushPicker = false
-    @State private var showTentacleSettings = false
     @State private var showBrushStudio = false
     @State private var showBrushNotes = false
     @State private var notesForBrush: BrushType = .smooth
@@ -1343,17 +1342,6 @@ extension ContentView {
             // 2. Brush picker
             Button(action: { showBrushPicker.toggle() }) {
                 SmallToolBtnView(icon: drawingEngine.selectedBrushType.icon, size: 32, hl: false)
-            }
-
-            // 2b. Tentacle color settings — näkyy vain kun tentacle valittu
-            if drawingEngine.selectedBrushType == .tentacle {
-                Button(action: { showTentacleSettings.toggle() }) {
-                    SmallToolBtnView(icon: "waveform.path.ecg", size: 32,
-                                     hl: drawingEngine.tentacleColor.source != .off)
-                }
-                .sheet(isPresented: $showTentacleSettings) {
-                    TentacleColorSettingsView(tc: drawingEngine.tentacleColor)
-                }
             }
             
             // 3. Brush Studio - highlight when studio preset is active

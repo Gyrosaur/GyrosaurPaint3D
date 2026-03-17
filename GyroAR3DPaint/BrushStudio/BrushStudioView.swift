@@ -459,7 +459,73 @@ struct ColorTab: View {
             default:
                 EmptyView()
             }
+
+            // MARK: - Live Color Modulation
+            Divider().background(Color.white.opacity(0.15)).padding(.vertical, 4)
+            SectionHeader(title: "Live Color (Input)", icon: "waveform.path.ecg")
+            Text("Ohjaa väriä A→B piirron aikana. Käytä Tentacle-presetillä.")
+                .font(.caption).foregroundColor(.secondary)
+
+            Picker("Source", selection: $colorMode.liveSource) {
+                ForEach(LiveColorSource.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }.pickerStyle(.menu)
+
+            if colorMode.liveSource != .off {
+                HStack(spacing: 16) {
+                    VStack(spacing: 4) {
+                        Text("Color A").font(.caption).foregroundColor(.secondary)
+                        ColorPicker("", selection: Binding(
+                            get: { Color(hue: Double(colorMode.liveHueA), saturation: Double(colorMode.liveSaturation), brightness: Double(colorMode.liveBrightness)) },
+                            set: { c in
+                                var h: CGFloat = 0, s: CGFloat = 0, v: CGFloat = 0, a: CGFloat = 0
+                                UIColor(c).getHue(&h, saturation: &s, brightness: &v, alpha: &a)
+                                colorMode.liveHueA = Float(h)
+                                colorMode.liveSaturation = Float(s)
+                                colorMode.liveBrightness = Float(v)
+                            }
+                        )).labelsHidden().frame(width: 44, height: 44)
+                    }
+                    VStack(spacing: 4) {
+                        Text("Color B").font(.caption).foregroundColor(.secondary)
+                        ColorPicker("", selection: Binding(
+                            get: { Color(hue: Double(colorMode.liveHueB), saturation: Double(colorMode.liveSaturation), brightness: Double(colorMode.liveBrightness)) },
+                            set: { c in
+                                var h: CGFloat = 0, s: CGFloat = 0, v: CGFloat = 0, a: CGFloat = 0
+                                UIColor(c).getHue(&h, saturation: &s, brightness: &v, alpha: &a)
+                                colorMode.liveHueB = Float(h)
+                            }
+                        )).labelsHidden().frame(width: 44, height: 44)
+                    }
+                    // Gradient preview A→B
+                    VStack(spacing: 2) {
+                        Text("Preview").font(.caption).foregroundColor(.secondary)
+                        LinearGradient(
+                            colors: liveGradientColors(mode: colorMode),
+                            startPoint: .leading, endPoint: .trailing
+                        )
+                        .frame(height: 28).cornerRadius(4)
+                    }
+                }
+                ParameterSlider(title: "Threshold", value: $colorMode.liveThreshold, range: 0...0.8, format: "%.2f")
+                ParameterSlider(title: "Release Speed", value: $colorMode.liveRelease, range: 0.01...0.4, format: "%.3f/frame")
+            }
         }
+    }
+}
+
+private func liveGradientColors(mode: ColorMode) -> [Color] {
+    let steps = 8
+    return (0..<steps).map { i in
+        let t = Double(i) / Double(steps - 1)
+        let hA = Double(mode.liveHueA)
+        let hB = Double(mode.liveHueB)
+        var dh = hB - hA
+        if dh > 0.5 { dh -= 1 }
+        if dh < -0.5 { dh += 1 }
+        let h = (hA + dh * t).truncatingRemainder(dividingBy: 1)
+        return Color(hue: h < 0 ? h + 1 : h,
+                     saturation: Double(mode.liveSaturation),
+                     brightness: Double(mode.liveBrightness))
     }
 }
 

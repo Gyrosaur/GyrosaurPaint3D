@@ -88,3 +88,19 @@
 
 ### Tehty:
 
+- `recordingStatusIcons` → yksi `⋯`-nappi + `statusPanelView` popover
+  - Popoverissa: performance, controller, AirPods, input source, camera color, input settings, MIDI
+- `TentacleColorController.swift` — uusi tiedosto
+  - Lähde: Xbox Right Stick X/Y, Mic Pitch, Mic Amplitude, tai Off
+  - Kaksi väriäärireytä (A ja B), threshold, release-nopeus
+  - `update()` per-tick: nopea ylöspäin, pehmeä release alaspäin
+  - Väri-interpolaatio lyhintä reittiä hue-ympyrässä
+- `DrawingEngine` — `tentacleColor: TentacleColorController` + `StrokePoint.tentacleHue`
+- `DrawingEngine.addPoint()` — tallentaa `tentacleColor.currentT` tentacle-brushille per-pisteeseen
+- `ARViewContainer.frameUpdate()` — `tentacleColor.update()` per-tick
+- `StrokeRenderer.makeTentacle()` — per-segment mesh omine väreineen, groupSize=4
+  - `tentacleUIColor()` — interpoloi base-väristä komplementtiväriin hue-kierrolla
+- `ContentView` — Tentacle-asetusnappi (waveform.path.ecg) ilmestyy kun tentacle valittuna
+- `InputSettingsView` — `TentacleColorSettingsView` lisätty (source, värit A/B, threshold, release, live preview)
+- `pbxproj` — `TentacleColorController.swift` lisätty Build + FileRef + Group + Sources
+

@@ -76,12 +76,36 @@ struct EmissionParams: Codable, Equatable {
 struct ColorMode: Codable, Equatable {
     var mode: ColorModeType = .solid
     var gradientStops: [GradientStop] = []
-    var velocityColorMap: [GradientStop] = [] // Color based on speed
-    var noiseScale: Float = 1.0         // For noise-based color
-    var noiseSpeed: Float = 0.0         // Animated noise
-    var hueShiftOverStroke: Float = 0.0 // Hue rotation along stroke
+    var velocityColorMap: [GradientStop] = []
+    var noiseScale: Float = 1.0
+    var noiseSpeed: Float = 0.0
+    var hueShiftOverStroke: Float = 0.0
     var saturationRange: ClosedRange<Float> = 0.8...1.0
     var brightnessRange: ClosedRange<Float> = 0.8...1.0
+
+    // MARK: - Live color modulation (tentacle ja muut brushit)
+    // Kun lähde on aktiivinen, per-point hue interpoloidaan reaaliajassa
+    var liveSource:      LiveColorSource = .off
+    // Väripari: liveColorA = matala arvo, liveColorB = korkea arvo
+    var liveHueA:        Float = 0.55   // cyan
+    var liveHueB:        Float = 0.0    // red
+    var liveSaturation:  Float = 1.0
+    var liveBrightness:  Float = 1.0
+    // Kynnys alle jonka = A-väri
+    var liveThreshold:   Float = 0.1
+    // Release-nopeus per frame (0.05 = hidas, 0.3 = nopea)
+    var liveRelease:     Float = 0.12
+}
+
+enum LiveColorSource: String, Codable, CaseIterable {
+    case off         = "Off"
+    case rightStickX = "Xbox Right Stick X"
+    case rightStickY = "Xbox Right Stick Y"
+    case leftStickX  = "Xbox Left Stick X"
+    case leftTrigger = "Xbox LT"
+    case rightTrigger = "Xbox RT"
+    case micPitch    = "Mic Pitch"
+    case micAmplitude = "Mic Amplitude"
 }
 
 enum ColorModeType: String, Codable, CaseIterable {

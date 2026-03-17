@@ -116,10 +116,10 @@ struct ARViewContainer: UIViewRepresentable {
                   let drawingEngine = drawingEngine,
                   let frame = arView.session.currentFrame else { return }
 
-            // Tentacle live color — päivitetään joka frame piirron aikana
-            drawingEngine.tentacleColor.update(
+            // Live color update — per frame, zero cost when liveSource == .off
+            drawingEngine.updateLiveColor(
                 controller: controllerManager,
-                micPitch: drawingEngine.micHueShift,
+                micPitch:     drawingEngine.micHueShift,
                 micAmplitude: drawingEngine.micBrushScale
             )
 

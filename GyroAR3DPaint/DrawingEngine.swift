@@ -77,7 +77,6 @@ struct StrokePoint {
     var opacity: Float = 1.0
     var color: Color? = nil
     var gradientValue: Float = 0
-    var tentacleHue: Float = -1  // -1 = not set, 0…1 = live hue override (Tentacle brush)
 }
 
 struct Stroke: Identifiable {
@@ -155,9 +154,35 @@ class DrawingEngine: ObservableObject {
     @Published var micBrushScale: Float = 0.0
     /// Spectral centroid 0–1 → hue rotation added to current stroke colour.
     @Published var micHueShift: Float = 0.0
+    /// Live color interpolation value 0–1 (A→B), updated per frame when preset has liveSource active
+    private(set) var liveColorT: Float = 0.0
+    private var liveSmoothed: Float = 0.0
 
-    // MARK: - Tentacle Live Color Controller
-    @Published var tentacleColor = TentacleColorController()
+    /// Call once per display-link frame to advance live color state.
+    func updateLiveColor(controller: GameControllerManager?, micPitch: Float, micAmplitude: Float) {
+        let src = activeBrushPreset.colorMode.liveSource
+        guard src != .off else { liveColorT = 0; liveSmoothed = 0; return }
+        let raw: Float
+        switch src {
+        case .off:          raw = 0
+        case .rightStickX:  raw = ((controller?.rightStickX ?? 0) + 1) / 2
+        case .rightStickY:  raw = ((controller?.rightStickY ?? 0) + 1) / 2
+        case .leftStickX:   raw = ((controller?.leftStickX  ?? 0) + 1) / 2
+        case .leftTrigger:  raw = controller?.leftTrigger  ?? 0
+        case .rightTrigger: raw = controller?.rightTrigger ?? 0
+        case .micPitch:     raw = micPitch
+        case .micAmplitude: raw = micAmplitude
+        }
+        let threshold = activeBrushPreset.colorMode.liveThreshold
+        let release   = activeBrushPreset.colorMode.liveRelease
+        let target: Float = raw > threshold ? (raw - threshold) / max(0.001, 1.0 - threshold) : 0
+        if target > liveSmoothed {
+            liveSmoothed = target
+        } else {
+            liveSmoothed = max(target, liveSmoothed - release)
+        }
+        liveColorT = liveSmoothed
+    }
 
     // MARK: - Brush Studio Integration
     @Published var activeBrushPreset: BrushDefinition = BrushDefinition.defaultSmooth
@@ -323,8 +348,10 @@ class DrawingEngine: ObservableObject {
             timestamp: Date().timeIntervalSince1970,
             opacity: opacity,
             color: pointColor,
-            gradientValue: airPodsGradientValue,
-            tentacleHue: selectedBrushType == .tentacle ? tentacleColor.currentT : -1
+            // liveColorT tallennetaan gradientValue-kenttään kun preset-live on aktiivinen
+            gradientValue: (useStudioPreset && activeBrushPreset.colorMode.liveSource != .off)
+                ? liveColorT
+                : airPodsGradientValue
         )
         
         currentStroke?.addPoint(point)
