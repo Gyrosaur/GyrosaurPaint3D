@@ -525,20 +525,24 @@ class StrokeRenderer {
         let parent = ModelEntity()
         let pts = stroke.points
         guard pts.count >= 2 else { return parent }
-        let seg = 8
-        // Tentacle: per-segmentti oma väri jotta ColorMode toimii tiheästi
-        // Ryhmitellään 3 pistettä per entity — suorituskyky vs väriresoluutio
-        let groupSize = 3
+        let seg = 14
+        // Käytetään yhden pistevälin segmenttejä, jotta väri ehtii vaihtua
+        // käytännössä portaattomasti strokea pitkin.
+        let groupSize = 1
         var i = 0
         while i < pts.count - 1 {
             let end = min(i + groupSize, pts.count - 1)
-            let midIdx = (i + end) / 2
-            let p = pts[midIdx]
-            let strokePos = pts.count > 1 ? Float(midIdx) / Float(pts.count - 1) : 0
-            let col = pointColor(p, stroke,
-                                 hueShift: Float.random(in: -0.08...0.08),
-                                 gradientPosition: strokePos,
-                                 pointIndex: midIdx)
+            let startPoint = pts[i]
+            let endPoint = pts[end]
+            let startPos = pts.count > 1 ? Float(i) / Float(pts.count - 1) : 0
+            let endPos = pts.count > 1 ? Float(end) / Float(pts.count - 1) : startPos
+            let startColor = pointColor(startPoint, stroke,
+                                        gradientPosition: startPos,
+                                        pointIndex: i)
+            let endColor = pointColor(endPoint, stroke,
+                                      gradientPosition: endPos,
+                                      pointIndex: end)
+            let col = blendedColor(startColor, endColor, t: 0.5)
             var verts: [SIMD3<Float>] = []
             var inds:  [UInt32]       = []
             var localIdx = 0
@@ -571,6 +575,21 @@ class StrokeRenderer {
     }
 
     private func tentacleUIColor(for t: Float, base: Color) -> UIColor { UIColor(base) }
+
+    private func blendedColor(_ a: UIColor, _ b: UIColor, t: CGFloat) -> UIColor {
+        var ah: CGFloat = 0, as_: CGFloat = 0, ab_: CGFloat = 0, aa: CGFloat = 0
+        var bh: CGFloat = 0, bs: CGFloat = 0, bb_: CGFloat = 0, ba: CGFloat = 0
+        a.getHue(&ah, saturation: &as_, brightness: &ab_, alpha: &aa)
+        b.getHue(&bh, saturation: &bs, brightness: &bb_, alpha: &ba)
+        var dh = bh - ah
+        if dh > 0.5 { dh -= 1 }
+        if dh < -0.5 { dh += 1 }
+        let hue = (ah + dh * t).truncatingRemainder(dividingBy: 1)
+        let sat = as_ + (bs - as_) * t
+        let bri = ab_ + (bb_ - ab_) * t
+        let alp = aa + (ba - aa) * t
+        return UIColor(hue: hue < 0 ? hue + 1 : hue, saturation: sat, brightness: bri, alpha: alp)
+    }
     
     private func makeRoot(_ stroke: Stroke) -> ModelEntity {
         let parent = ModelEntity()
@@ -1123,6 +1142,7 @@ class StrokeRenderer {
     private func buildMesh(_ verts: [SIMD3<Float>], _ inds: [UInt32], _ col: UIColor) -> ModelEntity {
         var desc = MeshDescriptor()
         desc.positions = MeshBuffer(verts)
+        desc.normals = MeshBuffer(generateSmoothNormals(verts: verts, inds: inds))
         desc.primitives = .triangles(inds)
         do {
             let mesh = try MeshResource.generate(from: [desc])
@@ -1130,6 +1150,26 @@ class StrokeRenderer {
             return ModelEntity(mesh: mesh, materials: [mat])
         } catch {
             return ModelEntity()
+        }
+    }
+
+    private func generateSmoothNormals(verts: [SIMD3<Float>], inds: [UInt32]) -> [SIMD3<Float>] {
+        guard !verts.isEmpty else { return [] }
+        var normals = Array(repeating: SIMD3<Float>(repeating: 0), count: verts.count)
+        for tri in stride(from: 0, to: inds.count, by: 3) {
+            guard tri + 2 < inds.count else { break }
+            let i0 = Int(inds[tri]), i1 = Int(inds[tri+1]), i2 = Int(inds[tri+2])
+            guard i0 < verts.count, i1 < verts.count, i2 < verts.count else { continue }
+            let faceNormal = simd_cross(verts[i1] - verts[i0], verts[i2] - verts[i0])
+            if simd_length_squared(faceNormal) > 0.000001 {
+                normals[i0] += faceNormal
+                normals[i1] += faceNormal
+                normals[i2] += faceNormal
+            }
+        }
+        return normals.map { n in
+            let len = simd_length(n)
+            return len > 0.000001 ? n / len : SIMD3<Float>(0, 1, 0)
         }
     }
 }
