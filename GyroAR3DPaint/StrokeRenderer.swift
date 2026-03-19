@@ -543,8 +543,9 @@ class StrokeRenderer {
                                       gradientPosition: endPos,
                                       pointIndex: end)
             let col = blendedColor(startColor, endColor, t: 0.5)
-            var verts: [SIMD3<Float>] = []
-            var inds:  [UInt32]       = []
+            var verts:   [SIMD3<Float>] = []
+            var normals: [SIMD3<Float>] = []
+            var inds:    [UInt32]       = []
             var localIdx = 0
             for j in i...end {
                 let pp = pts[j]
@@ -555,7 +556,9 @@ class StrokeRenderer {
                     let angle  = Float(k) / Float(seg) * .pi * 2
                     let wobble = sin(Float(j) * 0.5 + angle * 2) * 0.3
                     let norm   = basis.0 * cos(angle) + basis.1 * sin(angle)
-                    verts.append(pp.position + norm * pp.brushSize * taper * (1 + wobble))
+                    let vertex = pp.position + norm * pp.brushSize * taper * (1 + wobble)
+                    verts.append(vertex)
+                    normals.append(simd_normalize(vertex - pp.position))
                 }
                 if localIdx > 0 {
                     for k in 0..<seg {
@@ -568,7 +571,7 @@ class StrokeRenderer {
                 }
                 localIdx += 1
             }
-            parent.addChild(buildMesh(verts, inds, col))
+            parent.addChild(buildMesh(verts, inds, col, normals: normals, lighting: .tentacle))
             i += groupSize
         }
         return parent
@@ -1139,37 +1142,35 @@ class StrokeRenderer {
         return (right, realUp)
     }
     
-    private func buildMesh(_ verts: [SIMD3<Float>], _ inds: [UInt32], _ col: UIColor) -> ModelEntity {
+    private enum MeshLighting { case simple, tentacle }
+
+    private func buildMesh(
+        _ verts: [SIMD3<Float>],
+        _ inds: [UInt32],
+        _ col: UIColor,
+        normals: [SIMD3<Float>]? = nil,
+        lighting: MeshLighting = .simple
+    ) -> ModelEntity {
         var desc = MeshDescriptor()
         desc.positions = MeshBuffer(verts)
-        desc.normals = MeshBuffer(generateSmoothNormals(verts: verts, inds: inds))
+        if let normals, normals.count == verts.count {
+            desc.normals = MeshBuffer(normals)
+        }
         desc.primitives = .triangles(inds)
         do {
             let mesh = try MeshResource.generate(from: [desc])
-            let mat = SimpleMaterial(color: col, isMetallic: false)
-            return ModelEntity(mesh: mesh, materials: [mat])
+            switch lighting {
+            case .simple:
+                return ModelEntity(mesh: mesh, materials: [SimpleMaterial(color: col, isMetallic: false)])
+            case .tentacle:
+                var mat = PhysicallyBasedMaterial()
+                mat.baseColor = .init(tint: col)
+                mat.roughness = .init(floatLiteral: 0.45)
+                mat.metallic  = .init(floatLiteral: 0.0)
+                return ModelEntity(mesh: mesh, materials: [mat])
+            }
         } catch {
             return ModelEntity()
-        }
-    }
-
-    private func generateSmoothNormals(verts: [SIMD3<Float>], inds: [UInt32]) -> [SIMD3<Float>] {
-        guard !verts.isEmpty else { return [] }
-        var normals = Array(repeating: SIMD3<Float>(repeating: 0), count: verts.count)
-        for tri in stride(from: 0, to: inds.count, by: 3) {
-            guard tri + 2 < inds.count else { break }
-            let i0 = Int(inds[tri]), i1 = Int(inds[tri+1]), i2 = Int(inds[tri+2])
-            guard i0 < verts.count, i1 < verts.count, i2 < verts.count else { continue }
-            let faceNormal = simd_cross(verts[i1] - verts[i0], verts[i2] - verts[i0])
-            if simd_length_squared(faceNormal) > 0.000001 {
-                normals[i0] += faceNormal
-                normals[i1] += faceNormal
-                normals[i2] += faceNormal
-            }
-        }
-        return normals.map { n in
-            let len = simd_length(n)
-            return len > 0.000001 ? n / len : SIMD3<Float>(0, 1, 0)
         }
     }
 }
