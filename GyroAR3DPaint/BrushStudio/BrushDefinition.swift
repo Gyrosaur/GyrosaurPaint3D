@@ -83,18 +83,69 @@ struct ColorMode: Codable, Equatable {
     var saturationRange: ClosedRange<Float> = 0.8...1.0
     var brightnessRange: ClosedRange<Float> = 0.8...1.0
 
-    // MARK: - Live color modulation (tentacle ja muut brushit)
-    // Kun lähde on aktiivinen, per-point hue interpoloidaan reaaliajassa
+    // Live color modulation — added later, must decode with defaults for old presets
     var liveSource:      LiveColorSource = .off
-    // Väripari: liveColorA = matala arvo, liveColorB = korkea arvo
-    var liveHueA:        Float = 0.55   // cyan
-    var liveHueB:        Float = 0.0    // red
+    var liveHueA:        Float = 0.55
+    var liveHueB:        Float = 0.0
     var liveSaturation:  Float = 1.0
     var liveBrightness:  Float = 1.0
-    // Kynnys alle jonka = A-väri
     var liveThreshold:   Float = 0.1
-    // Release-nopeus per frame (0.05 = hidas, 0.3 = nopea)
     var liveRelease:     Float = 0.12
+
+    // Custom decoder: vanhemmat tallennetut presetit eivät sisällä live-kenttiä
+    // → puuttuvat kentät saavat oletusarvot eikä kaadu
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        mode             = try c.decodeIfPresent(ColorModeType.self,      forKey: .mode)             ?? .solid
+        gradientStops    = try c.decodeIfPresent([GradientStop].self,     forKey: .gradientStops)    ?? []
+        velocityColorMap = try c.decodeIfPresent([GradientStop].self,     forKey: .velocityColorMap) ?? []
+        noiseScale       = try c.decodeIfPresent(Float.self,              forKey: .noiseScale)       ?? 1.0
+        noiseSpeed       = try c.decodeIfPresent(Float.self,              forKey: .noiseSpeed)       ?? 0.0
+        hueShiftOverStroke = try c.decodeIfPresent(Float.self,            forKey: .hueShiftOverStroke) ?? 0.0
+        saturationRange  = try c.decodeIfPresent(ClosedRange<Float>.self, forKey: .saturationRange)  ?? 0.8...1.0
+        brightnessRange  = try c.decodeIfPresent(ClosedRange<Float>.self, forKey: .brightnessRange)  ?? 0.8...1.0
+        liveSource       = try c.decodeIfPresent(LiveColorSource.self,    forKey: .liveSource)       ?? .off
+        liveHueA         = try c.decodeIfPresent(Float.self,              forKey: .liveHueA)         ?? 0.55
+        liveHueB         = try c.decodeIfPresent(Float.self,              forKey: .liveHueB)         ?? 0.0
+        liveSaturation   = try c.decodeIfPresent(Float.self,              forKey: .liveSaturation)   ?? 1.0
+        liveBrightness   = try c.decodeIfPresent(Float.self,              forKey: .liveBrightness)   ?? 1.0
+        liveThreshold    = try c.decodeIfPresent(Float.self,              forKey: .liveThreshold)    ?? 0.1
+        liveRelease      = try c.decodeIfPresent(Float.self,              forKey: .liveRelease)      ?? 0.12
+    }
+
+    init() {}
+
+    init(mode: ColorModeType = .solid,
+         gradientStops: [GradientStop] = [],
+         velocityColorMap: [GradientStop] = [],
+         noiseScale: Float = 1.0,
+         noiseSpeed: Float = 0.0,
+         hueShiftOverStroke: Float = 0.0,
+         saturationRange: ClosedRange<Float> = 0.8...1.0,
+         brightnessRange: ClosedRange<Float> = 0.8...1.0,
+         liveSource: LiveColorSource = .off,
+         liveHueA: Float = 0.55,
+         liveHueB: Float = 0.0,
+         liveSaturation: Float = 1.0,
+         liveBrightness: Float = 1.0,
+         liveThreshold: Float = 0.1,
+         liveRelease: Float = 0.12) {
+        self.mode = mode
+        self.gradientStops = gradientStops
+        self.velocityColorMap = velocityColorMap
+        self.noiseScale = noiseScale
+        self.noiseSpeed = noiseSpeed
+        self.hueShiftOverStroke = hueShiftOverStroke
+        self.saturationRange = saturationRange
+        self.brightnessRange = brightnessRange
+        self.liveSource = liveSource
+        self.liveHueA = liveHueA
+        self.liveHueB = liveHueB
+        self.liveSaturation = liveSaturation
+        self.liveBrightness = liveBrightness
+        self.liveThreshold = liveThreshold
+        self.liveRelease = liveRelease
+    }
 }
 
 enum LiveColorSource: String, Codable, CaseIterable {
