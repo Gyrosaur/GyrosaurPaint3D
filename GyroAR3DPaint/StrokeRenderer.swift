@@ -525,24 +525,23 @@ class StrokeRenderer {
         let parent = ModelEntity()
         let pts = stroke.points
         guard pts.count >= 2 else { return parent }
-        let seg = 14
-        // Käytetään yhden pistevälin segmenttejä, jotta väri ehtii vaihtua
-        // käytännössä portaattomasti strokea pitkin.
-        let groupSize = 1
+
+        // Alkuperäinen muoto palautettu: seg=8, groupSize=4
+        // Väri: segmentin alku- ja loppupisteiden blend — pehmyt siirtymä segmentistä toiseen
+        let seg = 8
+        let groupSize = 4
         var i = 0
         while i < pts.count - 1 {
             let end = min(i + groupSize, pts.count - 1)
-            let startPoint = pts[i]
-            let endPoint = pts[end]
-            let startPos = pts.count > 1 ? Float(i) / Float(pts.count - 1) : 0
-            let endPos = pts.count > 1 ? Float(end) / Float(pts.count - 1) : startPos
-            let startColor = pointColor(startPoint, stroke,
-                                        gradientPosition: startPos,
-                                        pointIndex: i)
-            let endColor = pointColor(endPoint, stroke,
-                                      gradientPosition: endPos,
-                                      pointIndex: end)
+
+            // Segmentin alku- ja loppuvärit — blend antaa pehmyen siirtymän
+            let startPos = pts.count > 1 ? Float(i)   / Float(pts.count - 1) : 0
+            let endPos   = pts.count > 1 ? Float(end) / Float(pts.count - 1) : startPos
+            let startColor = pointColor(pts[i],   stroke, gradientPosition: startPos, pointIndex: i)
+            let endColor   = pointColor(pts[end], stroke, gradientPosition: endPos,   pointIndex: end)
+            // Segmentin väri on alun ja lopun keskiarvo — pehmyt, ei hypähdyksiä
             let col = blendedColor(startColor, endColor, t: 0.5)
+
             var verts:   [SIMD3<Float>] = []
             var normals: [SIMD3<Float>] = []
             var inds:    [UInt32]       = []
@@ -562,9 +561,9 @@ class StrokeRenderer {
                 }
                 if localIdx > 0 {
                     for k in 0..<seg {
-                        let n  = (k + 1) % seg
-                        let b  = UInt32((localIdx - 1) * seg)
-                        let t  = UInt32(localIdx * seg)
+                        let n = (k + 1) % seg
+                        let b = UInt32((localIdx - 1) * seg)
+                        let t = UInt32(localIdx * seg)
                         inds += [b+UInt32(k), t+UInt32(k), b+UInt32(n),
                                  b+UInt32(n), t+UInt32(k), t+UInt32(n)]
                     }
