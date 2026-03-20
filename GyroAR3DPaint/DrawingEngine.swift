@@ -100,7 +100,7 @@ class DrawingEngine: ObservableObject {
     @Published var brushSize: Float = 0.01
     @Published var selectedBrushType: BrushType = .smooth
     @Published var hueShift: Float = 0
-    @Published var opacity: Float = 1.0
+    @Published var opacity: Float = 0.9
     @Published var drawingDistanceOffset: Float = 0.0  // 0.0 = default (0.3m), 1.0 = +12m extra
     @Published var brushSizeMin: Float = 0.002
     @Published var brushSizeMax: Float = 0.05

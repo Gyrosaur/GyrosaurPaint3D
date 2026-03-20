@@ -123,12 +123,7 @@ struct ContentView: View {
             }
         }.store(in: &controllerCancellables)
         
-        // Right stick X controls opacity
-        controllerManager.$rightStickX.sink { [self] v in
-            if !selectionManager.isSelectionMode {
-                drawingEngine.opacity = max(0.1, min(1.0, (v + 1) / 2))
-            }
-        }.store(in: &controllerCancellables)
+        // Right stick X — ei enää ohjaa opacitya (sekoittui distance-säätöön)
         
         // LT and RT control drawing on/off (isControllerDrawing is updated in GameControllerManager)
         // The actual drawing logic is handled in ARViewContainer based on isControllerDrawing
@@ -137,7 +132,7 @@ struct ContentView: View {
         controllerManager.$rightBumper.sink { [self] p in if p { drawingEngine.invertColor() } }.store(in: &controllerCancellables)
         controllerManager.$buttonB.sink { [self] p in if p { drawingEngine.clearAllStrokes() } }.store(in: &controllerCancellables)
         controllerManager.$buttonX.sink { [self] p in if p { drawingEngine.undoLastStroke() } }.store(in: &controllerCancellables)
-        controllerManager.$buttonA.sink { [self] p in if p { resetColorAndOpacity() } }.store(in: &controllerCancellables)
+        controllerManager.$buttonA.sink { [self] p in if p { cycleBackgroundMode() } }.store(in: &controllerCancellables)
         controllerManager.$buttonY.sink { [self] p in if p { cycleDrawingMode() } }.store(in: &controllerCancellables)
         controllerManager.$menuButton.sink { [self] p in if p { hideUI.toggle() } }.store(in: &controllerCancellables)
     }
@@ -1866,7 +1861,7 @@ extension ContentView {
     func handleRT(_ v: Float) { if v > 0.5 { effectMode = .glow } else if effectMode == .glow { effectMode = .none } }
     
     func resetColorAndOpacity() {
-        drawingEngine.opacity = 1.0
+        drawingEngine.opacity = 0.9
         drawingEngine.hueShift = 0
         drawingEngine.clearControllerColor()
         drawingEngine.updateCurrentStrokeColor()
@@ -2250,7 +2245,7 @@ enum BackgroundMode: String, CaseIterable {
 
 // MARK: - Camera Settings
 class CameraSettings: ObservableObject {
-    @Published var backgroundMode: BackgroundMode = .ar
+    @Published var backgroundMode: BackgroundMode = .white
 }
 
 // MARK: - Compact Brush Picker Real
