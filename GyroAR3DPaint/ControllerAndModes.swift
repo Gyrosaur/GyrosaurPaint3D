@@ -59,41 +59,49 @@ class GameControllerManager: ObservableObject {
     let baseBrushMax: Float = 0.052
     let extendedBrushMin: Float = 0.0002  // 0.1x base min
     let extendedBrushMax: Float = 0.104   // 2x base max
-    
+
+    // Sigmoid easing: pienet liikkeet hitaita, iso tatin paine kiihdyttää
+    // k=4: maltillinen easing; suurempi k = jyrkempi porras
+    static func easedStick(_ x: Float, k: Float = 4.0) -> Float {
+        // Sigmoid: 1/(1+e^(-k*(x-0.5))) normalisoituna 0...1
+        // Muunnetaan -1...1 → 0...1 → eased → takaisin -1...1
+        guard abs(x) > 0.001 else { return 0 }
+        let sign: Float = x > 0 ? 1 : -1
+        let abs_x = abs(x)
+        // Cubic-smoothstep: t³(t(6t-15)+10) — erittäin pehmeä
+        let t = abs_x
+        let eased = t * t * t * (t * (t * 6 - 15) + 10)
+        return sign * eased
+    }
+
     // Computed values for drawing
     var hueShift: Float {
-        // Left stick controls hue: X = shift amount
-        return leftStickX * 0.5 // -0.5 to 0.5 hue shift
+        return GameControllerManager.easedStick(leftStickX) * 0.5
     }
-    
+
     var saturationShift: Float {
-        // Left stick Y = saturation
-        return (leftStickY + 1) / 2 // 0 to 1
+        return (GameControllerManager.easedStick(leftStickY) + 1) / 2
     }
-    
+
     var opacityValue: Float {
-        // Right stick Y = opacity
-        return max(0.1, (rightStickY + 1) / 2) // 0.1 to 1
+        return max(0.1, (GameControllerManager.easedStick(rightStickY) + 1) / 2)
     }
-    
+
     var brushSizeModifier: Float {
-        // Right stick X = size modifier
-        return 1 + rightStickX * 0.5 // 0.5 to 1.5
+        return 1 + GameControllerManager.easedStick(rightStickX) * 0.5
     }
     
     // Left stick Y controls brush size:
     // - Bottom (-1) = min size, Top (+1) = max size
     // - When L3 pressed (leftStickButton), range extends
     var controllerBrushSize: Float {
-        // Normalize stick Y from -1...1 to 0...1
-        let normalized = (leftStickY + 1) / 2  // 0 at bottom, 1 at top
-        
+        // Eased stick: smoothstep-käyrä — pienet liikkeet maltillisia
+        let raw = (leftStickY + 1) / 2  // 0…1
+        let t = GameControllerManager.easedStick(raw * 2 - 1) * 0.5 + 0.5  // eased 0…1
         if leftStickButton {
-            // Extended range: 0.1x min to 2x max
-            return extendedBrushMin + normalized * (extendedBrushMax - extendedBrushMin)
+            return extendedBrushMin + t * (extendedBrushMax - extendedBrushMin)
         } else {
-            // Normal range
-            return baseBrushMin + normalized * (baseBrushMax - baseBrushMin)
+            return baseBrushMin + t * (baseBrushMax - baseBrushMin)
         }
     }
     

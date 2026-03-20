@@ -125,14 +125,17 @@ struct ARViewContainer: UIViewRepresentable {
 
             let brushPosition = getBrushPosition(from: frame)
             
-            // Right stick (R3 pressed) → smooth distance control
+            // Right stick R3 held → smooth distance control
+            // Cubic easing: pienet liikkeet hitaita, isot nopeampia
+            // Täydellä tatilla ~8s 0→max distance
             if let cm = controllerManager, cm.isConnected, cm.rightStickButton {
-                let stickY = cm.rightStickY  // -1 to 1
+                let stickY = cm.rightStickY
                 let deadzone: Float = 0.15
                 if abs(stickY) > deadzone {
-                    let input = (stickY - (stickY > 0 ? deadzone : -deadzone)) / (1.0 - deadzone)
-                    let speed: Float = 0.008  // smooth ramp speed per frame
-                    let newVal = drawingEngine.drawingDistanceOffset + input * speed
+                    let raw = (stickY - (stickY > 0 ? deadzone : -deadzone)) / (1.0 - deadzone)
+                    let eased = raw * raw * raw  // cubic: hidas alku
+                    let speed: Float = 0.002     // hidas — täydellä tatilla ~8s 0→1
+                    let newVal = drawingEngine.drawingDistanceOffset + eased * speed
                     drawingEngine.drawingDistanceOffset = max(0, min(1, newVal))
                 }
             }
@@ -473,10 +476,10 @@ struct ARViewContainer: UIViewRepresentable {
         private func getBrushPosition(from frame: ARFrame) -> SIMD3<Float> {
             let cameraTransform = frame.camera.transform
             let baseDistance: Float = 0.3
-            // Logarithmic curve: slow start, accelerates toward max
-            // At offset 0 → 0 extra, at offset 1 → 500.0m extra
+            // Max distance 1/3 of previous (500m → ~167m max)
+            // Logarithmic curve: slow start, gradual acceleration
             let t = drawingEngine?.drawingDistanceOffset ?? 0.0
-            let extraDistance: Float = 500.0 * (log(1.0 + t * 9.0) / log(10.0))
+            let extraDistance: Float = 167.0 * (log(1.0 + t * 9.0) / log(10.0))
             let brushDistance = baseDistance + extraDistance
             let forward = SIMD3<Float>(
                 -cameraTransform.columns.2.x,

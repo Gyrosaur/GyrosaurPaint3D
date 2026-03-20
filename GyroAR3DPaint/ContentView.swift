@@ -300,17 +300,14 @@ struct ContentView: View {
         let x = controllerManager.leftStickX
         let y = controllerManager.leftStickY
         let magnitude = sqrt(x*x + y*y)
-        
-        if magnitude > 0.2 { // Dead zone
-            // Calculate angle (0-360°) -> hue (0-1)
+
+        if magnitude > 0.2 {
             let angle = atan2(y, x)
-            let hue = (angle + .pi) / (2 * .pi) // Convert -π...π to 0...1
-            
-            // Saturation from magnitude
-            let saturation = min(1.0, magnitude)
-            
-            // Set color directly from HSB
-            drawingEngine.setColorFromHSB(hue: CGFloat(hue), saturation: CGFloat(saturation), brightness: 1.0)
+            let hue = (angle + .pi) / (2 * .pi)
+            // Eased saturation: smoothstep — pienet liikkeet ei tee täyttä saturoi
+            let t = min(1.0, (magnitude - 0.2) / 0.8)
+            let easedSat = t * t * (3 - 2 * t)  // smoothstep
+            drawingEngine.setColorFromHSB(hue: CGFloat(hue), saturation: CGFloat(easedSat), brightness: 1.0)
         }
     }
     
