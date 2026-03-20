@@ -525,26 +525,22 @@ class StrokeRenderer {
         let parent = ModelEntity()
         let pts = stroke.points
         guard pts.count >= 2 else { return parent }
-
-        // Alkuperäinen muoto palautettu: seg=8, groupSize=4
-        // Väri: segmentin alku- ja loppupisteiden blend — pehmyt siirtymä segmentistä toiseen
         let seg = 8
-        let groupSize = 4
+        // Tentacle: per-segmentti oma väri jotta ColorMode toimii tiheästi
+        // Ryhmitellään 3 pistettä per entity — suorituskyky vs väriresoluutio
+        let groupSize = 3
         var i = 0
         while i < pts.count - 1 {
             let end = min(i + groupSize, pts.count - 1)
-
-            // Segmentin alku- ja loppuvärit — blend antaa pehmyen siirtymän
-            let startPos = pts.count > 1 ? Float(i)   / Float(pts.count - 1) : 0
-            let endPos   = pts.count > 1 ? Float(end) / Float(pts.count - 1) : startPos
-            let startColor = pointColor(pts[i],   stroke, gradientPosition: startPos, pointIndex: i)
-            let endColor   = pointColor(pts[end], stroke, gradientPosition: endPos,   pointIndex: end)
-            // Segmentin väri on alun ja lopun keskiarvo — pehmyt, ei hypähdyksiä
-            let col = blendedColor(startColor, endColor, t: 0.5)
-
-            var verts:   [SIMD3<Float>] = []
-            var normals: [SIMD3<Float>] = []
-            var inds:    [UInt32]       = []
+            let midIdx = (i + end) / 2
+            let p = pts[midIdx]
+            let strokePos = pts.count > 1 ? Float(midIdx) / Float(pts.count - 1) : 0
+            let col = pointColor(p, stroke,
+                                 hueShift: Float.random(in: -0.08...0.08),
+                                 gradientPosition: strokePos,
+                                 pointIndex: midIdx)
+            var verts: [SIMD3<Float>] = []
+            var inds:  [UInt32]       = []
             var localIdx = 0
             for j in i...end {
                 let pp = pts[j]
@@ -555,43 +551,26 @@ class StrokeRenderer {
                     let angle  = Float(k) / Float(seg) * .pi * 2
                     let wobble = sin(Float(j) * 0.5 + angle * 2) * 0.3
                     let norm   = basis.0 * cos(angle) + basis.1 * sin(angle)
-                    let vertex = pp.position + norm * pp.brushSize * taper * (1 + wobble)
-                    verts.append(vertex)
-                    normals.append(simd_normalize(vertex - pp.position))
+                    verts.append(pp.position + norm * pp.brushSize * taper * (1 + wobble))
                 }
                 if localIdx > 0 {
                     for k in 0..<seg {
-                        let n = (k + 1) % seg
-                        let b = UInt32((localIdx - 1) * seg)
-                        let t = UInt32(localIdx * seg)
+                        let n  = (k + 1) % seg
+                        let b  = UInt32((localIdx - 1) * seg)
+                        let t  = UInt32(localIdx * seg)
                         inds += [b+UInt32(k), t+UInt32(k), b+UInt32(n),
                                  b+UInt32(n), t+UInt32(k), t+UInt32(n)]
                     }
                 }
                 localIdx += 1
             }
-            parent.addChild(buildMesh(verts, inds, col, normals: normals, lighting: .tentacle))
+            parent.addChild(buildMesh(verts, inds, col))
             i += groupSize
         }
         return parent
     }
 
     private func tentacleUIColor(for t: Float, base: Color) -> UIColor { UIColor(base) }
-
-    private func blendedColor(_ a: UIColor, _ b: UIColor, t: CGFloat) -> UIColor {
-        var ah: CGFloat = 0, as_: CGFloat = 0, ab_: CGFloat = 0, aa: CGFloat = 0
-        var bh: CGFloat = 0, bs: CGFloat = 0, bb_: CGFloat = 0, ba: CGFloat = 0
-        a.getHue(&ah, saturation: &as_, brightness: &ab_, alpha: &aa)
-        b.getHue(&bh, saturation: &bs, brightness: &bb_, alpha: &ba)
-        var dh = bh - ah
-        if dh > 0.5 { dh -= 1 }
-        if dh < -0.5 { dh += 1 }
-        let hue = (ah + dh * t).truncatingRemainder(dividingBy: 1)
-        let sat = as_ + (bs - as_) * t
-        let bri = ab_ + (bb_ - ab_) * t
-        let alp = aa + (ba - aa) * t
-        return UIColor(hue: hue < 0 ? hue + 1 : hue, saturation: sat, brightness: bri, alpha: alp)
-    }
     
     private func makeRoot(_ stroke: Stroke) -> ModelEntity {
         let parent = ModelEntity()
@@ -1141,33 +1120,14 @@ class StrokeRenderer {
         return (right, realUp)
     }
     
-    private enum MeshLighting { case simple, tentacle }
-
-    private func buildMesh(
-        _ verts: [SIMD3<Float>],
-        _ inds: [UInt32],
-        _ col: UIColor,
-        normals: [SIMD3<Float>]? = nil,
-        lighting: MeshLighting = .simple
-    ) -> ModelEntity {
+    private func buildMesh(_ verts: [SIMD3<Float>], _ inds: [UInt32], _ col: UIColor) -> ModelEntity {
         var desc = MeshDescriptor()
         desc.positions = MeshBuffer(verts)
-        if let normals, normals.count == verts.count {
-            desc.normals = MeshBuffer(normals)
-        }
         desc.primitives = .triangles(inds)
         do {
             let mesh = try MeshResource.generate(from: [desc])
-            switch lighting {
-            case .simple:
-                return ModelEntity(mesh: mesh, materials: [SimpleMaterial(color: col, isMetallic: false)])
-            case .tentacle:
-                var mat = PhysicallyBasedMaterial()
-                mat.baseColor = .init(tint: col)
-                mat.roughness = .init(floatLiteral: 0.45)
-                mat.metallic  = .init(floatLiteral: 0.0)
-                return ModelEntity(mesh: mesh, materials: [mat])
-            }
+            let mat = SimpleMaterial(color: col, isMetallic: false)
+            return ModelEntity(mesh: mesh, materials: [mat])
         } catch {
             return ModelEntity()
         }
